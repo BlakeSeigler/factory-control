@@ -1,0 +1,101 @@
+# Line configuration: the single source of truth for every process.
+#
+# Physical parameter values below are PLACEHOLDERS chosen only to be in a
+# plausible order of magnitude. Each one is an open item in docs/plant-model.md
+# and must be justified before it is relied upon.
+
+line:
+  name: pellet-line-1
+  # series: feeder_1 discharges into feeder_2's hopper; feeder_2 discharges to the
+  # process (e.g. an extruder throat). See docs/decisions.md D-01.
+  topology: series
+  machine_order: [feeder_1, feeder_2]
+
+sim:
+  physics_dt_s: 0.01          # integration step of the plant model
+  publish_period_s: 0.1       # how often scalar tags are pushed into the OPC UA address space
+  time_scale: 1.0             # 1.0 = real time; >1 runs faster than wall clock (D-07)
+  seed: 42
+  upstream_supply:            # what feeds feeder_1's hopper (D-02)
+    kind: loader_on_switches  # loader turns on at low switch, off at high switch
+    rate_kg_h: 400.0
+
+machines:
+  - id: feeder_1
+    opcua:
+      endpoint: opc.tcp://127.0.0.1:4841/factory/feeder_1
+    motor:
+      rated_rpm: 1750.0
+      min_rpm: 0.0
+      max_rpm: 1800.0
+      time_constant_s: 0.8
+      max_accel_rpm_s: 600.0
+      initial_rpm: 0.0
+    gearbox:
+      ratio: 20.0             # motor rpm / screw rpm
+    screw:
+      displacement_cm3_per_rev: 250.0
+      bulk_density_kg_m3: 550.0
+    hopper:
+      capacity_kg: 50.0
+      low_switch_kg: 10.0
+      high_switch_kg: 40.0
+      initial_kg: 25.0
+    thermal:
+      ambient_c: 25.0
+      initial_c: 25.0
+    vibration:
+      sample_rate_hz: 2560.0
+      block_size: 1024        # 0.4 s per block at 2560 Hz
+
+  - id: feeder_2
+    opcua:
+      endpoint: opc.tcp://127.0.0.1:4842/factory/feeder_2
+    motor:
+      rated_rpm: 1750.0
+      min_rpm: 0.0
+      max_rpm: 1800.0
+      time_constant_s: 0.8
+      max_accel_rpm_s: 600.0
+      initial_rpm: 0.0
+    gearbox:
+      ratio: 20.0
+    screw:
+      displacement_cm3_per_rev: 250.0
+      bulk_density_kg_m3: 550.0
+    hopper:
+      capacity_kg: 30.0
+      low_switch_kg: 5.0
+      high_switch_kg: 25.0
+      initial_kg: 15.0
+    thermal:
+      ambient_c: 25.0
+      initial_c: 25.0
+    vibration:
+      sample_rate_hz: 2560.0
+      block_size: 1024
+
+supervisor:
+  db_path: data/factory.db
+  subscription_period_ms: 100
+  historian_flush_period_s: 1.0
+  analyzer:
+    setpoint_tracking:
+      deadband_rpm: 20.0        # |sp - pv| below this counts as "tracking"
+      min_step_rpm: 50.0        # setpoint changes smaller than this are ignored
+      timeout_s: 5.0            # how long the drive gets to respond (D-20)
+    overtemp:
+      warn_c: 90.0
+      alarm_c: 105.0
+      hysteresis_c: 3.0
+    vibration:
+      baseline_blocks: 50       # healthy blocks used to learn the baseline (D-22)
+      threshold_sigma: 4.0
+  control:
+    mode: manual                # manual | mpc
+    period_s: 1.0
+
+dashboard:
+  host: 127.0.0.1
+  port: 8000
+  default_window_s: 600

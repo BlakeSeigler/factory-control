@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line Dashboard</title>
+<link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --text: #1f1f1e;
+    --text-muted: #6b6a64;
+    --grid: #e6e5e0;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --text: #f0efec;
+      --text-muted: #a3a29a;
+      --grid: #2e2e2c;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+    }
+  }
+  body { margin: 0; padding: 16px; background: var(--surface); color: var(--text);
+         font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p  { margin: 0 0 12px; color: var(--text-muted); }
+  #chart { width: 100%; max-width: 1200px; }
+  .uplot, .u-legend { color: var(--text); font-family: inherit; }
+</style>
+</head>
+<body>
+  <h1>Motor speed (rpm)</h1>
+  <p id="status">loading...</p>
+  <div id="chart"></div>
+<script src="/static/vendor/uplot/uPlot.iife.min.js"></script>
+<script>
+// Placeholder: polls /api/series and redraws. Both machines are aligned onto a
+// shared time axis (union of timestamps, gaps as null) because uPlot expects one x array.
+// OPC UA subscriptions are report-by-exception: a sample means "the value changed to v
+// and held until the next sample". So lines are drawn stepped (hold last value), never
+// linearly interpolated, which would invent ramps that did not happen.
+const POLL_MS = 2000;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const statusEl = document.getElementById("status");
+const chartEl = document.getElementById("chart");
+let plot = null, machines = [];
+
+function align(series) {
+  const ids = Object.keys(series).sort();
+  const xs = [...new Set(ids.flatMap((id) => series[id].t))].sort((a, b) => a - b);
+  const index = new Map(xs.map((x, i) => [x, i]));
+  const ys = ids.map((id) => {
+    const y = new Array(xs.length).fill(null);
+    series[id].t.forEach((t, i) => { y[index.get(t)] = series[id].v[i]; });
+    return y;
+  });
+  return { ids, data: [xs, ...ys] };
+}
+
+function makePlot(ids) {
+  const colors = [css("--series-1"), css("--series-2")];
+  const axis = { stroke: css("--text-muted"), grid: { stroke: css("--grid"), width: 1 },
+                 ticks: { stroke: css("--grid"), width: 1 } };
+  return new uPlot({
+    width: chartEl.clientWidth, height: 360,
+    series: [{}, ...ids.map((id, i) => ({
+      label: id, stroke: colors[i % colors.length], width: 2, spanGaps: true,
+      paths: uPlot.paths.stepped({ align: 1 }),
+      value: (u, v) => (v == null ? "-" : v.toFixed(1)),
+    }))],
+    axes: [axis, { ...axis, label: "rpm" }],
+    scales: { x: { time: true } },
+    cursor: { points: { size: 8 } },
+  }, [[], ...ids.map(() => [])], chartEl);
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/series?tag=motor.speed_rpm");
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const { ids, data } = align((await r.json()).series);
+    if (!plot || ids.join() !== machines.join()) {
+      if (plot) plot.destroy();
+      machines = ids;
+      plot = makePlot(ids);
+    }
+    plot.setData(data);
+    statusEl.textContent = `${ids.length} machine(s), ${data[0].length} points, updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    statusEl.textContent = `no data: ${e.message}`;
+  }
+}
+
+window.addEventListener("resize", () => plot && plot.setSize({ width: chartEl.clientWidth, height: 360 }));
+refresh();
+setInterval(refresh, POLL_MS);
+</script>
+</body>
+</html>
