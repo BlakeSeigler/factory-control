@@ -9,9 +9,9 @@ from typing import Any
 
 @dataclass(frozen=True, slots=True)
 class Sample:
-    """One value change received from a machine."""
+    """One value change received from a device."""
 
-    machine_id: str
+    device_id: str
     tag: str  # Tag.key
     value: Any  # float | bool | str | list[float]
     source_ts: float  # unix seconds, from the OPC UA SourceTimestamp (sim clock)
@@ -33,7 +33,7 @@ class AlarmEvent:
     """Emitted by an analyzer rule when a condition becomes active or returns to normal."""
 
     ts: float
-    machine_id: str
+    device_id: str
     rule: str
     severity: Severity
     transition: AlarmTransition
@@ -43,7 +43,10 @@ class AlarmEvent:
 
 @dataclass(frozen=True, slots=True)
 class SetpointCommand:
+    """A value the supervisor writes to a device's writable tag."""
+
     ts: float
-    machine_id: str
-    rpm: float
-    source: str  # "operator" | "mpc" | ...
+    device_id: str
+    tag: str  # Tag.key of a writable tag, e.g. motor.speed_setpoint_rpm
+    value: float
+    source: str  # "operator" | "baseline" | "mpc" | ...

@@ -1,4 +1,4 @@
-"""Routes samples to per-machine rule instances and forwards alarm events."""
+"""Routes samples to per-device rule instances and forwards alarm events."""
 
 from __future__ import annotations
 
@@ -18,23 +18,30 @@ log = logging.getLogger(__name__)
 AlarmSink = Callable[[AlarmEvent], Awaitable[None]]
 
 
-def build_rules(machine_id: str, cfg: AnalyzerConfig) -> list[Rule]:
-    return [
-        SetpointTrackingRule(machine_id, cfg.setpoint_tracking),
-        OvertempRule(machine_id, cfg.overtemp),
-        VibrationAnomalyRule(machine_id, cfg.vibration),
+def build_rules(device_id: str, device_tags: frozenset[str], cfg: AnalyzerConfig) -> list[Rule]:
+    candidates: list[Rule] = [
+        SetpointTrackingRule(device_id, cfg.setpoint_tracking),
+        OvertempRule(device_id, cfg.overtemp),
+        VibrationAnomalyRule(device_id, cfg.vibration),
     ]
+    return [r for r in candidates if r.requires <= device_tags]
 
 
 class AnalyzerEngine:
-    def __init__(self, machine_ids: list[str], cfg: AnalyzerConfig, sink: AlarmSink) -> None:
-        self.rules: dict[str, list[Rule]] = {m: build_rules(m, cfg) for m in machine_ids}
+    def __init__(
+        self, device_tags: dict[str, frozenset[str]], cfg: AnalyzerConfig, sink: AlarmSink
+    ) -> None:
+        self.rules: dict[str, list[Rule]] = {
+            d: build_rules(d, tags, cfg) for d, tags in device_tags.items()
+        }
+        for d, rules in self.rules.items():
+            log.info("analyzer rules for %s: %s", d, [r.name for r in rules] or "none")
         self.sink = sink
-        self.sample_time: dict[str, float] = dict.fromkeys(machine_ids, 0.0)
+        self.sample_time: dict[str, float] = dict.fromkeys(device_tags, 0.0)
 
     async def _emit(self, events: list[AlarmEvent]) -> None:
         for ev in events:
-            log.warning("ALARM %s %s %s: %s", ev.machine_id, ev.rule, ev.transition, ev.message)
+            log.warning("ALARM %s %s %s: %s", ev.device_id, ev.rule, ev.transition, ev.message)
             await self.sink(ev)
 
     async def run(self, queue: asyncio.Queue[Sample], tick_period_s: float = 0.5) -> None:
@@ -45,9 +52,9 @@ class AnalyzerEngine:
                 s = await asyncio.wait_for(queue.get(), max(0.0, next_tick - loop.time()))
             except TimeoutError:
                 s = None
-            if s is not None and s.machine_id in self.rules:
-                self.sample_time[s.machine_id] = max(self.sample_time[s.machine_id], s.source_ts)
-                for rule in self.rules[s.machine_id]:
+            if s is not None and s.device_id in self.rules:
+                self.sample_time[s.device_id] = max(self.sample_time[s.device_id], s.source_ts)
+                for rule in self.rules[s.device_id]:
                     if s.tag in rule.inputs:
                         await self._emit(rule.on_sample(s))
             if loop.time() >= next_tick:

@@ -1,7 +1,7 @@
-"""OPC UA client for one machine: connect, subscribe, reconnect, write setpoints.
+"""OPC UA client side for one device: connect, subscribe, reconnect, write.
 
-One ``MachineClient`` per machine, each with its own session, so a dead machine
-cannot stall the other (requirement: separate server and connection per machine).
+The supervisor holds one ``DeviceClient`` (one OPC UA session) per device PLC, so
+an outage of one PLC cannot stall the others.
 """
 
 from __future__ import annotations
@@ -15,20 +15,19 @@ from asyncua.common.subscription import DataChangeNotif
 
 from factory_control.common import tags as T
 from factory_control.common.messages import Sample
-from factory_control.config import MachineConfig
 from factory_control.supervisor.bus import Bus
 
 log = logging.getLogger(__name__)
 
 GROUND_TRUTH_TAG = "sim.active_faults"
 # Server-side lifetime of a session after the client goes silent. Short, so a crashed
-# supervisor's session (and its subscriptions) is reclaimed quickly by the machine.
+# supervisor's session (and its subscriptions) is reclaimed quickly by the PLC.
 SESSION_TIMEOUT_MS = 30_000
 
 
 class _Handler:
-    def __init__(self, machine_id: str, keys: dict[ua.NodeId, str], bus: Bus[Sample]) -> None:
-        self.machine_id = machine_id
+    def __init__(self, device_id: str, keys: dict[ua.NodeId, str], bus: Bus[Sample]) -> None:
+        self.device_id = device_id
         self.keys = keys
         self.bus = bus
 
@@ -37,7 +36,7 @@ class _Handler:
         ts = dv.SourceTimestamp or dv.ServerTimestamp
         self.bus.publish(
             Sample(
-                machine_id=self.machine_id,
+                device_id=self.device_id,
                 tag=self.keys[node.nodeid],
                 value=val,
                 source_ts=ts.timestamp() if ts else 0.0,
@@ -46,13 +45,19 @@ class _Handler:
         )
 
     def status_change_notification(self, status: Any) -> None:
-        log.warning("%s subscription status change: %s", self.machine_id, status)
+        log.warning("%s subscription status change: %s", self.device_id, status)
 
 
-class MachineClient:
+async def resolve_tag_node(client: Client, device_type: str, tag: T.Tag) -> Node:
+    ns = await client.get_namespace_index(T.DEVICE_NS_URI)
+    root = T.DEVICE_TYPES[device_type].root
+    return await client.nodes.objects.get_child([f"{ns}:{root}", *(f"{ns}:{p}" for p in tag.path)])
+
+
+class DeviceClient:
     def __init__(
         self,
-        cfg: MachineConfig,
+        cfg: Any,  # a DeviceConfig
         bus: Bus[Sample],
         *,
         period_ms: int,
@@ -62,12 +67,13 @@ class MachineClient:
         self.bus = bus
         self.period_ms = period_ms
         self.include_ground_truth = include_ground_truth
+        self.tags = T.tags_for(cfg.type, cfg.instruments)
         self.connected = asyncio.Event()
         self._client: Client | None = None
         self._nodes: dict[str, Node] = {}
 
     @property
-    def machine_id(self) -> str:
+    def device_id(self) -> str:
         return self.cfg.id
 
     async def run(self, stop: asyncio.Event) -> None:
@@ -81,15 +87,13 @@ class MachineClient:
                     self._client = client
                     await self._subscribe(client)
                     self.connected.set()
-                    log.info("%s connected to %s", self.machine_id, self.cfg.opcua.endpoint)
+                    log.info("%s connected to %s", self.device_id, self.cfg.opcua.endpoint)
                     backoff = 1.0
                     while not stop.is_set():
                         await client.check_connection()
                         await asyncio.sleep(1.0)
             except (OSError, TimeoutError, ua.UaError) as e:
-                log.warning(
-                    "%s connection problem: %r; retry in %.0fs", self.machine_id, e, backoff
-                )
+                log.warning("%s connection problem: %r; retry in %.0fs", self.device_id, e, backoff)
             finally:
                 self.connected.clear()
                 self._client = None
@@ -99,11 +103,9 @@ class MachineClient:
                 backoff = min(backoff * 2, 30.0)
 
     async def _subscribe(self, client: Client) -> None:
-        ns = await client.get_namespace_index(T.FEEDER_NS_URI)
         keys: dict[ua.NodeId, str] = {}
-        for tag in T.tags_for(self.cfg.instruments):
-            path = [f"{ns}:{T.ROOT_OBJECT}", *(f"{ns}:{p}" for p in tag.path)]
-            node = await client.nodes.objects.get_child(path)
+        for tag in self.tags:
+            node = await resolve_tag_node(client, self.cfg.type, tag)
             self._nodes[tag.key] = node
             keys[node.nodeid] = tag.key
 
@@ -114,13 +116,15 @@ class MachineClient:
             )
             keys[node.nodeid] = GROUND_TRUTH_TAG
 
-        handler = _Handler(self.machine_id, keys, self.bus)
+        handler = _Handler(self.device_id, keys, self.bus)
         sub = await client.create_subscription(self.period_ms, handler)
-        # TODO(D-06): per-tag sampling intervals, queue sizes and deadbands.
-        await sub.subscribe_data_change(list(client.get_node(n) for n in keys))
+        # TODO(D-11): per-tag sampling intervals, queue sizes and deadbands.
+        await sub.subscribe_data_change([client.get_node(n) for n in keys])
 
-    async def write_setpoint(self, rpm: float) -> None:
+    async def write(self, tag_key: str, value: float) -> None:
+        tag = T.ALL_TAGS[tag_key]
+        if not tag.writable or tag not in self.tags:
+            raise ValueError(f"{tag_key} is not a writable tag of {self.device_id}")
         if self._client is None:
-            raise ConnectionError(f"{self.machine_id} is not connected")
-        node = self._nodes[T.SPEED_SETPOINT.key]
-        await node.write_value(ua.Variant(float(rpm), ua.VariantType.Double))
+            raise ConnectionError(f"{self.device_id} is not connected")
+        await self._nodes[tag_key].write_value(ua.Variant(float(value), ua.VariantType.Double))

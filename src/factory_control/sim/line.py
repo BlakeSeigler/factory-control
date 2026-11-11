@@ -1,35 +1,38 @@
-"""The line: feeders coupled in series by material flow.
+"""The line: devices coupled by material flow, upstream to downstream.
 
-    supply --> [feeder_1 hopper -> screw] --> [feeder_2 hopper -> screw] --> process
+    batch refill -> shredder -> extruder -> water bath -> pelletizer -> pellets
 
 Coupling is physical (mass), so it lives here in the simulator, not on the OPC UA
-network. Each feeder still gets its own OPC UA server (machine/), exactly as two
-real machines would; the supervisor cannot tell they share a process (D-05).
+network. Each device still has its own PLC and OPC UA server (plc/), exactly as
+real equipment would; the supervisor cannot tell they share a process (D-05).
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from factory_control.config import AppConfig, UpstreamSupplyConfig
+from factory_control.config import AppConfig, RefillConfig
 from factory_control.sim.clock import SimClock
-from factory_control.sim.feeder import Feeder
+from factory_control.sim.devices import DevicePlant, build_device
+from factory_control.sim.devices.shredder import ShredderPlant
 
 
-class UpstreamSupply:
-    """Material source for the first hopper (D-02).
+class BatchRefill:
+    """Batch refill of the first hopper (D-02).
 
-    PLACEHOLDER: always off. ``batch_refill`` must model: LOW switch of the first
-    hopper uncovers -> after ``response_delay_s`` a batch of ``batch_kg`` pours in
-    at ``pour_rate_kg_h``. Whether the delay is fixed or random (a person
-    responding) and what happens if the batch would overflow are open (D-02).
+    PLACEHOLDER: never delivers. Must implement: when the shredder's LOW switch
+    uncovers and no batch is pending, schedule a batch of ``batch_kg`` to start
+    after ``response_delay_s`` and pour at ``pour_rate_kg_h``. Open: fixed or
+    random delay (automatic loader vs. a person), and what happens if a batch
+    would overflow the hopper.
     """
 
-    def __init__(self, cfg: UpstreamSupplyConfig) -> None:
+    def __init__(self, cfg: RefillConfig) -> None:
         self.cfg = cfg
+        self.delivered_kg = 0.0
 
-    def flow_kg_s(self, first: Feeder) -> float:
-        del first
+    def flow_kg_s(self, t: float, first: ShredderPlant) -> float:
+        del t, first
         return 0.0
 
 
@@ -38,17 +41,22 @@ class Line:
         self.cfg = cfg
         self.clock = clock
         rng = np.random.default_rng(cfg.sim.seed)
-        self.feeders: dict[str, Feeder] = {
-            mid: Feeder(cfg.machine(mid), np.random.default_rng(rng.integers(2**63)))
-            for mid in cfg.line.machine_order
+        self.devices: dict[str, DevicePlant] = {
+            did: build_device(
+                cfg.device(did), cfg.sim.material, np.random.default_rng(rng.integers(2**63))
+            )
+            for did in cfg.line.material_path
         }
-        self.supply = UpstreamSupply(cfg.sim.upstream_supply)
-        self.line_output_kg_s = 0.0  # ground truth only; not exposed as a sensor (D-03)
+        first = self.devices[cfg.line.material_path[0]]
+        assert isinstance(first, ShredderPlant)
+        self.first: ShredderPlant = first
+        self.refill = BatchRefill(cfg.sim.refill)
+        self.output_kg_s = 0.0  # pellets leaving the line; ground truth only
 
     def step(self, dt: float) -> None:
-        order = self.cfg.line.machine_order
-        flow = self.supply.flow_kg_s(self.feeders[order[0]])
-        for mid in order:
-            flow = self.feeders[mid].step(self.clock.now, dt, inflow_kg_s=flow)
-        self.line_output_kg_s = flow
+        t = self.clock.now
+        flow = self.refill.flow_kg_s(t, self.first)
+        for did in self.cfg.line.material_path:
+            flow = self.devices[did].step(t, dt, inflow_kg_s=flow)
+        self.output_kg_s = flow
         self.clock.advance(dt)

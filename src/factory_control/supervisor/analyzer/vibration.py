@@ -1,6 +1,6 @@
 """Rule 3: anomalous vibration from the spectrum of the accelerometer signal.
 
-Candidate pipeline (docs/analyzer.md section 3, D-22):
+Candidate pipeline (docs/analyzer.md section 3, D-36):
 
   1. per block: detrend, Hann window, rFFT (or Welch over several blocks)
   2. order-normalize: express frequency as multiples of the current shaft speed,
@@ -42,9 +42,10 @@ def amplitude_spectrum(block: np.ndarray, fs_hz: float) -> tuple[np.ndarray, np.
 class VibrationAnomalyRule(Rule):
     name = "vibration_anomaly"
     inputs = frozenset({T.VIB_WAVEFORM.key, T.VIB_SAMPLE_RATE.key, T.SPEED.key})
+    requires = frozenset({T.VIB_WAVEFORM.key})
 
-    def __init__(self, machine_id: str, cfg: VibrationAnalyzerConfig) -> None:
-        super().__init__(machine_id)
+    def __init__(self, device_id: str, cfg: VibrationAnalyzerConfig) -> None:
+        super().__init__(device_id)
         self.cfg = cfg
 
     def on_sample(self, sample: Sample) -> list[AlarmEvent]:

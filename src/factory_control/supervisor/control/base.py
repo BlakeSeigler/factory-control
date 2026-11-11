@@ -16,9 +16,9 @@ from factory_control.supervisor.state import StateCache
 
 @dataclass(frozen=True, slots=True)
 class LineTarget:
-    """What the operator asks of the line. How it is set at runtime is D-30."""
+    """What the operator asks of the line: pellet output. How it is set is D-45."""
 
-    mass_flow_kg_h: float
+    output_kg_h: float
 
 
 class Controller(ABC):
@@ -29,7 +29,7 @@ class Controller(ABC):
 
 
 class ManualController(Controller):
-    """No automatic action; setpoints come from the operator (``fc setpoint``)."""
+    """No automatic action; setpoints come from the operator (``fc write``)."""
 
     def step(
         self, now: float, state: StateCache, target: LineTarget | None

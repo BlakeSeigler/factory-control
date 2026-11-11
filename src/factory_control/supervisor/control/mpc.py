@@ -1,19 +1,15 @@
-"""Model predictive controller for the line.
+"""Model predictive controller for the line (supervisory layer).
 
-NOT IMPLEMENTED. Candidate formulation (docs/mpc.md section 5):
+NOT IMPLEMENTED. Scope and formulation are open (docs/control.md sections 6-7,
+D-41). Leading candidate: one MPC over the shredder + extruder section
 
-  minimize over u[0..N-1]
-      sum_k  q_f * (m_dot_line[k] - m_dot_target)^2
-           + q_m * (M_2[k] - M_2_ref)^2
-           + r   * ||u[k] - u[k-1]||^2
-  subject to
-      model dynamics (control/model.py)
-      rpm_min <= u[k] <= rpm_max
-      |u[k] - u[k-1]| <= du_max
-      M_low <= M_2[k] <= M_high          (soft, slack-penalized)
+  manipulated   shredder speed, extruder speed (optionally barrel setpoint)
+  controlled    line output (tracking), extruder hopper mass (keep in band)
+  constraints   speed and ramp limits; motor temperature and current limits;
+                heater output not saturated; hopper levels (soft)
 
-Solve as a QP each control period (receding horizon); apply u[0] only. Solver
-choice (OSQP via cvxpy, CasADi, hand-rolled condensed QP) is D-34.
+with the pelletizer kept OUTSIDE the MPC as a ratio follower of the estimated
+throughput (it is algebraic and fast: nothing for an optimizer to plan).
 """
 
 from __future__ import annotations
@@ -27,4 +23,4 @@ class MpcController(Controller):
     def step(
         self, now: float, state: StateCache, target: LineTarget | None
     ) -> list[SetpointCommand]:
-        raise NotImplementedError("see docs/mpc.md")
+        raise NotImplementedError("see docs/control.md")

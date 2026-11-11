@@ -1,13 +1,16 @@
 """Typed configuration loaded from ``config/line.yaml``.
 
 Every process (simulator, supervisor, dashboard) loads the same file so that
-machine ids, endpoints and parameters cannot drift between them.
+device ids, endpoints and parameters cannot drift between them.
+
+Devices are a discriminated union on ``type``: each device type has its own
+config class, so a shredder cannot be configured with a barrel by mistake.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,7 +22,7 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-# --- machine ---------------------------------------------------------------------------
+# --- reusable components --------------------------------------------------------------
 
 
 class OpcUaConfig(_Strict):
@@ -36,16 +39,21 @@ class MotorConfig(_Strict):
 
 
 class GearboxConfig(_Strict):
-    ratio: float = Field(gt=0)
+    ratio: float = Field(gt=0)  # motor rpm / driven-shaft rpm
 
 
-class ScrewConfig(_Strict):
-    displacement_cm3_per_rev: float = Field(gt=0)
-    bulk_density_kg_m3: float = Field(gt=0)
+class MotorThermalConfig(_Strict):
+    ambient_c: float = 25.0
+    initial_c: float = 25.0
+
+
+class VibrationConfig(_Strict):
+    sample_rate_hz: float = Field(gt=0)
+    block_size: int = Field(gt=0)
 
 
 class LoadCellConfig(_Strict):
-    """Weighing system under a hopper. Imperfection parameters are placeholders (D-26)."""
+    """Weighing system under a hopper. Imperfection parameters are placeholders (D-21)."""
 
     resolution_kg: float = Field(gt=0, default=0.01)
     noise_kg: float = Field(ge=0, default=0.0)
@@ -65,30 +73,96 @@ class HopperConfig(_Strict):
         return self
 
 
-class ThermalConfig(_Strict):
-    ambient_c: float = 25.0
+# --- device-specific components --------------------------------------------------------
+
+
+class ShredderRotorConfig(_Strict):
+    capacity_kg_h_at_rated: float = Field(gt=0)  # placeholder throughput model (D-16)
+
+
+class ExtruderScrewConfig(_Strict):
+    output_kg_h_per_screw_rpm: float = Field(gt=0)  # placeholder throughput model (D-17)
+
+
+class PidConfig(_Strict):
+    kp: float
+    ki: float = 0.0  # 1/s
+    kd: float = 0.0  # s
+    out_min: float = 0.0
+    out_max: float = 100.0
+
+
+class BarrelConfig(_Strict):
     initial_c: float = 25.0
+    setpoint_c: float = 200.0
+    max_setpoint_c: float = 280.0
+    heater_power_kw: float = Field(gt=0)
+    min_screw_temp_c: float = 160.0  # cold-start interlock (D-28)
+    pid: PidConfig
 
 
-class VibrationConfig(_Strict):
-    sample_rate_hz: float = Field(gt=0)
-    block_size: int = Field(gt=0)
+class BathConfig(_Strict):
+    initial_c: float = 20.0
 
 
-class MachineConfig(_Strict):
+class CutterConfig(_Strict):
+    knives: int = Field(gt=0)
+    strands: int = Field(gt=0)
+    # One motor drives feed rolls and rotor through fixed ratios (D-10, D-19):
+    strand_speed_m_min_per_rpm: float = Field(gt=0)  # feed-roll surface speed per motor rpm
+    rotor_rpm_per_motor_rpm: float = Field(gt=0, default=1.0)
+
+
+# --- devices ---------------------------------------------------------------------------
+
+
+class _DeviceBase(_Strict):
     id: str
     opcua: OpcUaConfig
-    motor: MotorConfig
-    gearbox: GearboxConfig
-    screw: ScrewConfig
-    hopper: HopperConfig
-    thermal: ThermalConfig
-    vibration: VibrationConfig
 
     @property
     def instruments(self) -> frozenset[str]:
-        """Optional instruments fitted to this machine; selects optional tags."""
-        return frozenset({"hopper_load_cell"} if self.hopper.load_cell else ())
+        """Optional instruments fitted; selects optional tags (common/tags.py)."""
+        hopper: HopperConfig | None = getattr(self, "hopper", None)
+        return frozenset({"hopper_load_cell"} if hopper and hopper.load_cell else ())
+
+
+class ShredderDeviceConfig(_DeviceBase):
+    type: Literal["shredder"]
+    hopper: HopperConfig
+    motor: MotorConfig
+    gearbox: GearboxConfig
+    rotor: ShredderRotorConfig
+    motor_thermal: MotorThermalConfig
+    vibration: VibrationConfig
+
+
+class ExtruderDeviceConfig(_DeviceBase):
+    type: Literal["extruder"]
+    hopper: HopperConfig
+    motor: MotorConfig
+    gearbox: GearboxConfig
+    screw: ExtruderScrewConfig
+    barrel: BarrelConfig
+    motor_thermal: MotorThermalConfig
+    vibration: VibrationConfig
+
+
+class WaterBathDeviceConfig(_DeviceBase):
+    type: Literal["water_bath"]
+    bath: BathConfig
+
+
+class PelletizerDeviceConfig(_DeviceBase):
+    type: Literal["pelletizer"]
+    motor: MotorConfig
+    cutter: CutterConfig
+
+
+DeviceConfig = Annotated[
+    ShredderDeviceConfig | ExtruderDeviceConfig | WaterBathDeviceConfig | PelletizerDeviceConfig,
+    Field(discriminator="type"),
+]
 
 
 # --- line / sim ------------------------------------------------------------------------
@@ -96,23 +170,28 @@ class MachineConfig(_Strict):
 
 class LineConfig(_Strict):
     name: str
-    topology: Literal["series"]
-    machine_order: list[str]
+    # Upstream -> downstream. The line in this project is fixed (D-01); the list is
+    # validated against it so that a config typo cannot silently reorder physics.
+    material_path: list[str]
 
 
-class UpstreamSupplyConfig(_Strict):
-    """How material reaches the first machine's hopper (D-02).
+class MaterialConfig(_Strict):
+    """Placeholder material properties for the recycled feed (D-25)."""
 
-    batch_refill: when the first hopper's LOW switch uncovers, a batch of
-    ``batch_kg`` is requested; it arrives after ``response_delay_s`` (someone or
-    something has to bring it) and pours in at ``pour_rate_kg_h``.
+    solid_density_kg_m3: float = 950.0
+    melt_cp_kj_kg_k: float = 2.0
+
+
+class RefillConfig(_Strict):
+    """Batch refill of the first hopper (D-02).
+
+    When the first hopper's LOW switch uncovers, a batch of ``batch_kg`` is
+    requested; it starts pouring after ``response_delay_s`` at ``pour_rate_kg_h``.
     """
 
-    kind: Literal["batch_refill", "constant", "none"]
-    batch_kg: float = Field(gt=0, default=25.0)
-    response_delay_s: float = Field(ge=0, default=60.0)
-    pour_rate_kg_h: float = Field(gt=0, default=3000.0)
-    constant_rate_kg_h: float = Field(ge=0, default=0.0)
+    batch_kg: float = Field(gt=0)
+    response_delay_s: float = Field(ge=0)
+    pour_rate_kg_h: float = Field(gt=0)
 
 
 class SimConfig(_Strict):
@@ -120,7 +199,8 @@ class SimConfig(_Strict):
     publish_period_s: float = Field(gt=0)
     time_scale: float = Field(gt=0, default=1.0)
     seed: int = 0
-    upstream_supply: UpstreamSupplyConfig
+    material: MaterialConfig = MaterialConfig()
+    refill: RefillConfig
 
 
 # --- supervisor ------------------------------------------------------------------------
@@ -150,7 +230,7 @@ class AnalyzerConfig(_Strict):
 
 
 class ControlConfig(_Strict):
-    mode: Literal["manual", "mpc"] = "manual"
+    mode: Literal["manual", "baseline", "mpc"] = "manual"
     period_s: float = Field(gt=0, default=1.0)
 
 
@@ -170,28 +250,36 @@ class DashboardConfig(_Strict):
 
 # --- root ------------------------------------------------------------------------------
 
+EXPECTED_PATH_TYPES = ["shredder", "extruder", "water_bath", "pelletizer"]
+
 
 class AppConfig(_Strict):
     line: LineConfig
     sim: SimConfig
-    machines: list[MachineConfig]
+    devices: list[DeviceConfig]
     supervisor: SupervisorConfig
     dashboard: DashboardConfig
 
     @model_validator(mode="after")
     def _consistent(self) -> AppConfig:
-        ids = [m.id for m in self.machines]
+        ids = [d.id for d in self.devices]
         if len(set(ids)) != len(ids):
-            raise ValueError(f"duplicate machine ids: {ids}")
-        if sorted(ids) != sorted(self.line.machine_order):
-            raise ValueError("line.machine_order must list exactly the configured machines")
+            raise ValueError(f"duplicate device ids: {ids}")
+        if sorted(ids) != sorted(self.line.material_path):
+            raise ValueError("line.material_path must list exactly the configured devices")
+        types = [self.device(i).type for i in self.line.material_path]
+        if types != EXPECTED_PATH_TYPES:
+            raise ValueError(f"material path must be {EXPECTED_PATH_TYPES} by type, got {types}")
+        endpoints = [d.opcua.endpoint for d in self.devices]
+        if len(set(endpoints)) != len(endpoints):
+            raise ValueError("each device needs its own OPC UA endpoint")
         return self
 
-    def machine(self, machine_id: str) -> MachineConfig:
-        for m in self.machines:
-            if m.id == machine_id:
-                return m
-        raise KeyError(machine_id)
+    def device(self, device_id: str) -> DeviceConfig:
+        for d in self.devices:
+            if d.id == device_id:
+                return d
+        raise KeyError(device_id)
 
 
 def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:

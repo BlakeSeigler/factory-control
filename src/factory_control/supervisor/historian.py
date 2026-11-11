@@ -23,15 +23,15 @@ class Historian:
 
     def _accept(self, s: Sample) -> None:
         if s.tag == GROUND_TRUTH_TAG:
-            if self._last_truth.get(s.machine_id) != s.value:  # store transitions only
-                self._last_truth[s.machine_id] = s.value
-                self.db.insert_ground_truth(s.source_ts, s.machine_id, str(s.value))
+            if self._last_truth.get(s.device_id) != s.value:  # store transitions only
+                self._last_truth[s.device_id] = s.value
+                self.db.insert_ground_truth(s.source_ts, s.device_id, str(s.value))
             return
-        tag = T.TAGS_BY_KEY.get(s.tag)
+        tag = T.ALL_TAGS.get(s.tag)
         if tag is None or not tag.historize:
-            # TODO(D-17): vibration waveform retention policy (store raw / features / on alarm).
+            # TODO(D-30): vibration waveform retention policy (store raw / features / on alarm).
             return
-        self._rows.append((s.source_ts, s.machine_id, s.tag, float(s.value), s.status))
+        self._rows.append((s.source_ts, s.device_id, s.tag, float(s.value), s.status))
 
     async def run(self, queue: asyncio.Queue[Sample]) -> None:
         loop = asyncio.get_running_loop()

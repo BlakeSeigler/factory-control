@@ -1,10 +1,11 @@
-"""Plant model of the pellet line. Pure Python/numpy, no OPC UA dependency.
+"""Plant model of the recycling line. Pure Python/numpy; no OPC UA, no control logic.
 
-Layering (see docs/plant-model.md):
+    components/   reusable physics: motor/drive, motor thermal, hopper, sensors, vibration
+    devices/      one plant model per device type, composed from components
+    line.py       couples devices by material flow; batch refill of the first hopper
+    faults.py     fault injection
 
-    true physical state  --(sensors.py)-->  measured values  --(machine/)-->  OPC UA
-
-Process faults (jam, bridging, winding short) act on the physics; sensor faults
-(stuck, drift, noise) act only in the measurement layer. Keeping the two layers
-separate is what lets us ask "did the analyzer see what really happened".
+Control logic (barrel PID, interlocks) lives in ``plc/``, not here: the plant only
+has actuators and sensors, exactly like real equipment (docs/architecture.md).
+Process faults act on physics; sensor faults act only in the measurement layer.
 """

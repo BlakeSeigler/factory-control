@@ -3,7 +3,7 @@
 Each consumer gets its own bounded queue so a slow consumer (e.g. the historian
 during a disk stall) cannot block the analyzer. On overflow the oldest item is
 dropped and counted: for a monitoring system, stale data is worth less than
-fresh data. Whether any consumer must be lossless is D-18.
+fresh data. Whether any consumer must be lossless is D-31.
 """
 
 from __future__ import annotations

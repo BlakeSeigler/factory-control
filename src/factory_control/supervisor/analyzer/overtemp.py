@@ -1,6 +1,6 @@
 """Rule 2: motor temperature too high.
 
-Candidate logic (docs/analyzer.md section 2, D-23): two thresholds with
+Candidate logic (docs/analyzer.md section 2, D-35): two thresholds with
 hysteresis to avoid alarm chatter around the limit:
 
     RAISE warning at T >= warn_c,   CLEAR at T < warn_c  - hysteresis_c
@@ -21,9 +21,10 @@ from factory_control.supervisor.analyzer.base import Rule
 class OvertempRule(Rule):
     name = "overtemp"
     inputs = frozenset({T.MOTOR_TEMP.key})
+    requires = inputs
 
-    def __init__(self, machine_id: str, cfg: OvertempConfig) -> None:
-        super().__init__(machine_id)
+    def __init__(self, device_id: str, cfg: OvertempConfig) -> None:
+        super().__init__(device_id)
         self.cfg = cfg
 
     def on_sample(self, sample: Sample) -> list[AlarmEvent]:

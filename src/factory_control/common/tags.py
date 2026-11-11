@@ -1,27 +1,19 @@
-"""The tag contract between a machine's OPC UA server and the supervisor's client.
+"""The tag contract between each device's PLC (OPC UA server) and the supervisor.
 
-Both sides import this module: the server builds its address space from it and the
-client resolves nodes from it. Changing a tag here changes it everywhere, which is
-the point; there is no second list to keep in sync.
+Both sides import this module: a PLC builds its address space from it and the
+supervisor's client resolves nodes from it. There is no second list to keep in sync.
 
-Address space of every feeder (browse names, all in namespace ``FEEDER_NS_URI``)::
+Tags are grouped into reusable *components* (hopper, motor, vibration, barrel,
+bath); a *device type* is a root object plus a set of components:
 
-    Objects/
-      Feeder/
-        Identification/MachineId        String   R
-        Motor/SpeedSetpoint             Double   RW   rpm
-        Motor/Speed                     Double   R    rpm
-        Motor/Temperature               Double   R    degC
-        Motor/Current                   Double   R    A (drive output current)
-        Hopper/LevelLow                 Boolean  R    True = material present at switch
-        Hopper/LevelHigh                Boolean  R    True = material present at switch
-        Hopper/Weight                   Double   R    kg net material; only if a load cell is fitted
-        Vibration/SampleRate            Double   R    Hz
-        Vibration/Waveform              Double[] R    m/s^2, one block per update
-      Simulation/                       (separate namespace SIM_NS_URI, sim only, D-12)
-        ActiveFaults                    String   R    JSON ground truth
-        InjectFault(name, params_json)  Method
-        ClearFaults()                   Method
+    Shredder    Identification, Hopper (+Weight), Motor, MotorHealth, Vibration
+    Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel
+    WaterBath   Identification, Bath
+    Pelletizer  Identification, Motor                 (sensors to confirm, D-10)
+
+Example browse path: ``Objects/Extruder/Barrel/TemperatureSetpoint``.
+Every server additionally exposes ``Objects/Simulation`` in a separate namespace
+(sim only, D-14).
 """
 
 from __future__ import annotations
@@ -29,10 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-FEEDER_NS_URI = "urn:factory-control:feeder"
+DEVICE_NS_URI = "urn:factory-control:device"
 SIM_NS_URI = "urn:factory-control:simulation"
-
-ROOT_OBJECT = "Feeder"
 SIM_OBJECT = "Simulation"
 
 
@@ -45,104 +35,123 @@ class ValueType(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Tag:
-    key: str  # stable internal id, used in the DB and the analyzer
-    path: tuple[str, ...]  # browse path below Objects/Feeder
+    key: str  # stable internal id (unique within a device), used in the DB and analyzer
+    path: tuple[str, ...]  # browse path below the device's root object
     vtype: ValueType
     unit: str = ""
     writable: bool = False
     historize: bool = True  # stored in the ``sample`` table (scalars only)
     description: str = ""
-    requires: str | None = None  # optional instrument; tag exists only if it is fitted
+    requires: str | None = None  # optional instrument; tag exists only if fitted
 
 
-MACHINE_ID = Tag(
-    "ident.machine_id",
-    ("Identification", "MachineId"),
-    ValueType.STRING,
-    historize=False,
-    description="Configured machine id",
-)
-SPEED_SETPOINT = Tag(
-    "motor.speed_setpoint_rpm",
-    ("Motor", "SpeedSetpoint"),
-    ValueType.DOUBLE,
-    unit="rpm",
-    writable=True,
-    description="Commanded motor speed",
-)
-SPEED = Tag(
-    "motor.speed_rpm",
-    ("Motor", "Speed"),
-    ValueType.DOUBLE,
-    unit="rpm",
-    description="Measured motor shaft speed",
-)
-MOTOR_TEMP = Tag(
-    "motor.temperature_c",
-    ("Motor", "Temperature"),
-    ValueType.DOUBLE,
-    unit="degC",
-    description="Motor winding/frame temperature (D-15)",
-)
-MOTOR_CURRENT = Tag(
-    "motor.current_a",
-    ("Motor", "Current"),
-    ValueType.DOUBLE,
-    unit="A",
-    description="Drive output current (RMS), as reported by the VFD (D-04)",
-)
-LEVEL_LOW = Tag(
+def _t(key: str, path: str, vtype: ValueType, unit: str = "", **kw: object) -> Tag:
+    return Tag(key, tuple(path.split("/")), vtype, unit, **kw)  # type: ignore[arg-type]
+
+
+D, B, S = ValueType.DOUBLE, ValueType.BOOLEAN, ValueType.STRING
+
+# --- components ------------------------------------------------------------------------
+
+DEVICE_ID = _t("ident.device_id", "Identification/DeviceId", S, historize=False)
+
+LEVEL_LOW = _t(
     "hopper.level_low",
-    ("Hopper", "LevelLow"),
-    ValueType.BOOLEAN,
+    "Hopper/LevelLow",
+    B,
     description="Low level switch; True = material present at switch",
 )
-LEVEL_HIGH = Tag(
+LEVEL_HIGH = _t(
     "hopper.level_high",
-    ("Hopper", "LevelHigh"),
-    ValueType.BOOLEAN,
+    "Hopper/LevelHigh",
+    B,
     description="High level switch; True = material present at switch",
 )
-HOPPER_WEIGHT = Tag(
+HOPPER_WEIGHT = _t(
     "hopper.weight_kg",
-    ("Hopper", "Weight"),
-    ValueType.DOUBLE,
-    unit="kg",
-    description="Net material mass in the hopper from its load cell (D-03)",
+    "Hopper/Weight",
+    D,
+    "kg",
     requires="hopper_load_cell",
+    description="Net material mass from the hopper's load cell (D-03)",
 )
-VIB_SAMPLE_RATE = Tag(
-    "vibration.sample_rate_hz",
-    ("Vibration", "SampleRate"),
-    ValueType.DOUBLE,
-    unit="Hz",
-    historize=False,
+HOPPER = (LEVEL_LOW, LEVEL_HIGH, HOPPER_WEIGHT)
+
+SPEED_SETPOINT = _t("motor.speed_setpoint_rpm", "Motor/SpeedSetpoint", D, "rpm", writable=True)
+SPEED = _t("motor.speed_rpm", "Motor/Speed", D, "rpm")
+MOTOR = (SPEED_SETPOINT, SPEED)
+
+MOTOR_CURRENT = _t(
+    "motor.current_a",
+    "Motor/Current",
+    D,
+    "A",
+    description="Drive output current (RMS); logged, no rule (D-38)",
 )
-VIB_WAVEFORM = Tag(
+MOTOR_TEMP = _t("motor.temperature_c", "Motor/Temperature", D, "degC")
+MOTOR_HEALTH = (MOTOR_CURRENT, MOTOR_TEMP)
+
+VIB_SAMPLE_RATE = _t("vibration.sample_rate_hz", "Vibration/SampleRate", D, "Hz", historize=False)
+VIB_WAVEFORM = _t(
     "vibration.waveform",
-    ("Vibration", "Waveform"),
+    "Vibration/Waveform",
     ValueType.DOUBLE_ARRAY,
-    unit="m/s^2",
+    "m/s^2",
     historize=False,
-    description="Acceleration block; stored separately, see docs/data.md",
+    description="One acceleration block per update",
 )
+VIBRATION = (VIB_SAMPLE_RATE, VIB_WAVEFORM)
 
-FEEDER_TAGS: tuple[Tag, ...] = (
-    MACHINE_ID,
-    SPEED_SETPOINT,
-    SPEED,
-    MOTOR_TEMP,
-    MOTOR_CURRENT,
-    LEVEL_LOW,
-    LEVEL_HIGH,
-    HOPPER_WEIGHT,
-    VIB_SAMPLE_RATE,
-    VIB_WAVEFORM,
+BARREL_SETPOINT = _t(
+    "barrel.temperature_setpoint_c",
+    "Barrel/TemperatureSetpoint",
+    D,
+    "degC",
+    writable=True,
+    description="Setpoint of the PLC's barrel PID",
 )
+BARREL_TEMP = _t(
+    "barrel.temperature_c", "Barrel/Temperature", D, "degC", description="Barrel thermocouple"
+)
+HEATER_OUTPUT = _t(
+    "barrel.heater_output_pct",
+    "Barrel/HeaterOutput",
+    D,
+    "%",
+    description="Barrel PID output (heater duty); a PLC value, not a sensor",
+)
+BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
 
-TAGS_BY_KEY: dict[str, Tag] = {t.key: t for t in FEEDER_TAGS}
+BATH_TEMP = _t("bath.water_temperature_c", "Bath/WaterTemperature", D, "degC")
+BATH = (BATH_TEMP,)
+
+# --- device types ----------------------------------------------------------------------
 
 
-def tags_for(instruments: frozenset[str]) -> tuple[Tag, ...]:
-    """The tags a machine with the given optional instruments exposes."""
-    return tuple(t for t in FEEDER_TAGS if t.requires is None or t.requires in instruments)
+@dataclass(frozen=True, slots=True)
+class DeviceType:
+    name: str  # matches config ``type``
+    root: str  # root object below Objects/
+    tags: tuple[Tag, ...]
+
+
+DEVICE_TYPES: dict[str, DeviceType] = {
+    dt.name: dt
+    for dt in (
+        DeviceType("shredder", "Shredder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION)),
+        DeviceType(
+            "extruder", "Extruder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL)
+        ),
+        DeviceType("water_bath", "WaterBath", (DEVICE_ID, *BATH)),
+        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR)),
+    )
+}
+
+ALL_TAGS: dict[str, Tag] = {t.key: t for dt in DEVICE_TYPES.values() for t in dt.tags}
+
+
+def tags_for(device_type: str, instruments: frozenset[str] = frozenset()) -> tuple[Tag, ...]:
+    """The tags a device of this type, with these optional instruments, exposes."""
+    return tuple(
+        t for t in DEVICE_TYPES[device_type].tags if t.requires is None or t.requires in instruments
+    )

@@ -1,0 +1,12 @@
+# Example scenario (fault physics not implemented yet).
+name: shredder_jam
+description: Shredder jams at t=120 s; cleared at t=150 s.
+events:
+  - at_s: 120.0
+    device: shredder
+    fault: shredder_jam
+    params: {severity: 0.8}
+  - at_s: 150.0
+    device: shredder
+    fault: shredder_jam
+    action: clear

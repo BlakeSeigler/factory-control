@@ -1,7 +1,7 @@
 import math
 
 from factory_control.config import MotorConfig
-from factory_control.sim.motor import Motor
+from factory_control.sim.components.motor import Motor
 
 CFG = MotorConfig(
     rated_rpm=1750, max_rpm=1800, time_constant_s=0.8, max_accel_rpm_s=600, initial_rpm=0

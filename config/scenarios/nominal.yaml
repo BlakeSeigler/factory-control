@@ -1,5 +1,5 @@
 # Fault scenario: a timed script of fault injections applied by the simulator.
-# Schema is defined by factory_control.sim.faults.Scenario. Empty = healthy run.
+# Schema: factory_control.sim.faults.Scenario. Empty = healthy run.
 name: nominal
 description: Healthy operation, no injected faults.
 events: []

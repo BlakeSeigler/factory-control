@@ -22,29 +22,43 @@ from pydantic import BaseModel, ConfigDict
 
 
 class FaultKind(StrEnum):
-    # process faults (act on physics)
-    SCREW_JAM = "screw_jam"  # load torque up, flow down
-    HOPPER_BRIDGING = "hopper_bridging"  # flow down with material still in hopper
+    """Catalog with signatures and expected detection: docs/fault-injection.md."""
+
+    # shredder
+    SHREDDER_JAM = "shredder_jam"  # hard/oversized piece stalls the rotor
+    KNIFE_WEAR = "knife_wear"  # throughput down, cutting torque up
+    # extruder
+    HOPPER_BRIDGING = "hopper_bridging"  # flakes bridge: screw starves with material present
+    HEATER_FAILURE = "heater_failure"  # barrel heater band open: PID output saturates
+    SCREEN_BLOCKAGE = "screen_blockage"  # melt filter clogs: back pressure, output down
+    # any motor
     WINDING_SHORT = "winding_short"  # extra copper loss -> heating
-    FAN_BLOCKED = "fan_blocked"  # thermal resistance up -> heating
-    BEARING_WEAR = "bearing_wear"  # bearing defect tones grow
-    MISALIGNMENT = "misalignment"  # 2x running-speed component grows
+    FAN_BLOCKED = "fan_blocked"  # motor cooling lost -> heating
+    BEARING_WEAR = "bearing_wear"  # bearing defect impulses in vibration
+    MISALIGNMENT = "misalignment"  # 2x running-speed vibration
     DRIVE_UNRESPONSIVE = "drive_unresponsive"  # VFD ignores new setpoints
-    # sensor faults (act on measurements only)
+    # strands / pelletizer / bath
+    STRAND_BREAK = "strand_break"  # a strand stops reaching the cutter
+    BATH_OVERHEAT = "bath_overheat"  # cooling lost: soft strands, deformed pellets
+    # supply
+    REFILL_LATE = "refill_late"  # batch delivered late or not at all
+    # sensors
     SENSOR_STUCK = "sensor_stuck"
     SENSOR_DRIFT = "sensor_drift"
     SWITCH_CHATTER = "switch_chatter"
+    THERMOCOUPLE_OPEN = "thermocouple_open"
 
 
 @dataclass(slots=True)
 class FaultEffects:
-    """Superposed effect of all active faults on one machine for one step.
+    """Superposed effect of all active faults on one device for one step.
 
-    Defaults are the identity (healthy machine).
+    Defaults are the identity (healthy device).
     """
 
     load_torque_add_nm: float = 0.0
-    fill_factor_mult: float = 1.0
+    throughput_mult: float = 1.0
+    heater_power_mult: float = 1.0
     copper_loss_mult: float = 1.0
     thermal_resistance_mult: float = 1.0
     drive_accepts_setpoints: bool = True
@@ -56,7 +70,7 @@ class ScenarioEvent(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     at_s: float
-    machine: str
+    device: str
     fault: FaultKind
     action: Literal["inject", "clear"] = "inject"
     params: dict[str, Any] = {}
@@ -71,7 +85,7 @@ class Scenario(BaseModel):
 
 
 class FaultManager:
-    """Holds active faults for one machine and folds them into ``FaultEffects``."""
+    """Holds active faults for one device and folds them into ``FaultEffects``."""
 
     def __init__(self) -> None:
         self.active: dict[FaultKind, dict[str, Any]] = {}

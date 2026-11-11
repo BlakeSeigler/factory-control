@@ -14,7 +14,7 @@ from pathlib import Path
 
 from factory_control.common.messages import AlarmEvent, SetpointCommand
 
-SampleRow = tuple[float, str, str, float, int]  # ts, machine_id, tag, value, status
+SampleRow = tuple[float, str, str, float, int]  # ts, device_id, tag, value, status
 
 
 class Database:
@@ -37,36 +37,38 @@ class Database:
         sql = resources.files("factory_control.storage").joinpath("schema.sql").read_text()
         self.conn.executescript(sql)
 
-    def upsert_machines(self, machines: Iterable[tuple[str, str]]) -> None:
+    def upsert_devices(self, devices: Iterable[tuple[str, str, str]]) -> None:
+        """(id, type, endpoint) rows."""
         with self.conn:
             self.conn.executemany(
-                "INSERT INTO machine (id, endpoint) VALUES (?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET endpoint = excluded.endpoint",
-                list(machines),
+                "INSERT INTO device (id, type, endpoint) VALUES (?, ?, ?) ON CONFLICT(id) "
+                "DO UPDATE SET type = excluded.type, endpoint = excluded.endpoint",
+                list(devices),
             )
 
     def insert_samples(self, rows: list[SampleRow]) -> None:
         with self.conn:
             self.conn.executemany(
-                "INSERT INTO sample (ts, machine_id, tag, value, status) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO sample (ts, device_id, tag, value, status) VALUES (?, ?, ?, ?, ?)",
                 rows,
             )
 
     def insert_setpoint_command(self, cmd: SetpointCommand) -> None:
         with self.conn:
             self.conn.execute(
-                "INSERT INTO setpoint_command (ts, machine_id, rpm, source) VALUES (?, ?, ?, ?)",
-                (cmd.ts, cmd.machine_id, cmd.rpm, cmd.source),
+                "INSERT INTO setpoint_command (ts, device_id, tag, value, source) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (cmd.ts, cmd.device_id, cmd.tag, cmd.value, cmd.source),
             )
 
     def insert_alarm_event(self, ev: AlarmEvent) -> None:
         with self.conn:
             self.conn.execute(
-                "INSERT INTO alarm_event (ts, machine_id, rule, severity, transition, message, "
+                "INSERT INTO alarm_event (ts, device_id, rule, severity, transition, message, "
                 "details) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     ev.ts,
-                    ev.machine_id,
+                    ev.device_id,
                     ev.rule,
                     ev.severity.value,
                     ev.transition.value,
@@ -75,22 +77,22 @@ class Database:
                 ),
             )
 
-    def insert_ground_truth(self, ts: float, machine_id: str, active_faults_json: str) -> None:
+    def insert_ground_truth(self, ts: float, device_id: str, active_faults_json: str) -> None:
         with self.conn:
             self.conn.execute(
-                "INSERT INTO sim_ground_truth (ts, machine_id, active_faults) VALUES (?, ?, ?)",
-                (ts, machine_id, active_faults_json),
+                "INSERT INTO sim_ground_truth (ts, device_id, active_faults) VALUES (?, ?, ?)",
+                (ts, device_id, active_faults_json),
             )
 
     # -- reader -------------------------------------------------------------------------
 
-    def machine_ids(self) -> list[str]:
-        return [r[0] for r in self.conn.execute("SELECT id FROM machine ORDER BY id")]
+    def device_ids(self) -> list[str]:
+        return [r[0] for r in self.conn.execute("SELECT id FROM device ORDER BY id")]
 
-    def series(self, machine_id: str, tag: str, since: float) -> list[tuple[float, float]]:
+    def series(self, device_id: str, tag: str, since: float) -> list[tuple[float, float]]:
         cur = self.conn.execute(
-            "SELECT ts, value FROM sample WHERE machine_id = ? AND tag = ? AND ts >= ? ORDER BY ts",
-            (machine_id, tag, since),
+            "SELECT ts, value FROM sample WHERE device_id = ? AND tag = ? AND ts >= ? ORDER BY ts",
+            (device_id, tag, since),
         )
         return cur.fetchall()
 

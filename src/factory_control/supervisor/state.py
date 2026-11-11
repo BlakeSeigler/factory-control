@@ -1,4 +1,4 @@
-"""Latest-value cache per machine; the controller's view of the line."""
+"""Latest-value cache per device; the controller's view of the line."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ class StateCache:
         self.latest: dict[str, dict[str, tuple[float, Any]]] = defaultdict(dict)
         self.now = 0.0  # newest source timestamp seen (sim time)
 
-    def get(self, machine_id: str, tag: str) -> Any | None:
-        entry = self.latest.get(machine_id, {}).get(tag)
+    def get(self, device_id: str, tag: str) -> Any | None:
+        entry = self.latest.get(device_id, {}).get(tag)
         return entry[1] if entry else None
 
     async def run(self, queue: asyncio.Queue[Sample]) -> None:
         while True:
             s = await queue.get()
-            self.latest[s.machine_id][s.tag] = (s.source_ts, s.value)
+            self.latest[s.device_id][s.tag] = (s.source_ts, s.value)
             self.now = max(self.now, s.source_ts)

@@ -1,8 +1,9 @@
-"""Supervisor process: OPC UA clients, historian, analyzer and controller.
+r"""Supervisor process: OPC UA clients, historian, analyzer and controller.
 
-Data flow inside the process::
+Data flow inside the process (one DeviceClient = one OPC UA session per PLC)::
 
-    MachineClient(feeder_1) --\               /--> Historian      -> SQLite
-                               >-- Bus --+---> StateCache     -> Controller -> client.write
-    MachineClient(feeder_2) --/               \--> AnalyzerEngine -> alarms -> Historian
+    DeviceClient(shredder)   --\                /--> Historian      -> SQLite
+    DeviceClient(extruder)   ---+-> Bus fan-out +--> StateCache     -> Controller -> client.write
+    DeviceClient(water_bath) ---+               \--> AnalyzerEngine -> alarms -> Historian
+    DeviceClient(pelletizer) --/
 """

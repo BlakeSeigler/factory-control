@@ -1,6 +1,6 @@
 """Rule 1: a setpoint was changed but the speed is not following it.
 
-Candidate logic (docs/analyzer.md section 1, decisions D-20, D-21):
+Candidate logic (docs/analyzer.md section 1, decisions D-33, D-34):
 
   on SpeedSetpoint change with |delta| >= min_step_rpm:
       arm a timer at t0 = sample time, remember sp and pv(t0)
@@ -24,9 +24,10 @@ from factory_control.supervisor.analyzer.base import Rule
 class SetpointTrackingRule(Rule):
     name = "setpoint_tracking"
     inputs = frozenset({T.SPEED_SETPOINT.key, T.SPEED.key})
+    requires = inputs
 
-    def __init__(self, machine_id: str, cfg: SetpointTrackingConfig) -> None:
-        super().__init__(machine_id)
+    def __init__(self, device_id: str, cfg: SetpointTrackingConfig) -> None:
+        super().__init__(device_id)
         self.cfg = cfg
 
     def on_sample(self, sample: Sample) -> list[AlarmEvent]:

@@ -1,84 +1,115 @@
 # Line configuration: the single source of truth for every process.
 #
-# Physical parameter values below are PLACEHOLDERS chosen only to be in a
-# plausible order of magnitude. Each one is an open item in docs/plant-model.md
-# and must be justified before it is relied upon.
+# Material path (docs/architecture.md):
+#   batch refill -> shredder unit -> extruder unit -> water bath -> pelletizer -> pellets
+#
+# Physical parameter values are PLACEHOLDERS chosen only to be in a plausible order
+# of magnitude. Each is an open item in docs/plant-model.md until justified.
 
 line:
-  name: pellet-line-1
-  # series: feeder_1 discharges into feeder_2's hopper; feeder_2 discharges to the
-  # process (e.g. an extruder throat). See docs/decisions.md D-01.
-  topology: series
-  machine_order: [feeder_1, feeder_2]
+  name: recycling-line-1
+  material_path: [shredder, extruder, water_bath, pelletizer]
 
 sim:
   physics_dt_s: 0.01          # integration step of the plant model
-  publish_period_s: 0.1       # how often scalar tags are pushed into the OPC UA address space
-  time_scale: 1.0             # 1.0 = real time; >1 runs faster than wall clock (D-07)
+  publish_period_s: 0.1       # how often the simulated PLCs update their OPC UA values
+  time_scale: 1.0             # 1.0 = real time; >1 runs faster than wall clock (D-06)
   seed: 42
-  upstream_supply:            # what feeds feeder_1's hopper (D-02)
-    kind: batch_refill        # a batch is loaded when feeder_1's low switch uncovers
-    batch_kg: 25.0            # placeholder batch size
-    response_delay_s: 60.0    # time from "bin low" until the batch starts pouring
-    pour_rate_kg_h: 3000.0    # how fast a batch pours in (25 kg takes 30 s)
+  material:                   # recycled feed; see D-25
+    solid_density_kg_m3: 950.0
+    melt_cp_kj_kg_k: 2.0
+  refill:                     # batch refill of the shredder hopper (D-02)
+    batch_kg: 100.0
+    response_delay_s: 120.0   # "hopper low" -> batch starts pouring
+    pour_rate_kg_h: 3000.0    # 100 kg pours in 2 min
 
-machines:
-  - id: feeder_1
+devices:
+  - id: shredder
+    type: shredder
     opcua:
-      endpoint: opc.tcp://127.0.0.1:4841/factory/feeder_1
-    motor:
-      rated_rpm: 1750.0
-      min_rpm: 0.0
-      max_rpm: 1800.0
-      time_constant_s: 0.8
-      max_accel_rpm_s: 600.0
-      initial_rpm: 0.0
-    gearbox:
-      ratio: 20.0             # motor rpm / screw rpm
-    screw:
-      displacement_cm3_per_rev: 250.0
-      bulk_density_kg_m3: 550.0
+      endpoint: opc.tcp://127.0.0.1:4841/factory/shredder
     hopper:
-      capacity_kg: 50.0
-      low_switch_kg: 10.0
-      high_switch_kg: 40.0
-      initial_kg: 25.0
-      load_cell:              # feeder_1's bin is weighed (D-03); placeholder imperfections
+      capacity_kg: 200.0
+      low_switch_kg: 40.0
+      high_switch_kg: 160.0
+      initial_kg: 120.0
+      load_cell:              # line throughput is measured here (D-03)
         resolution_kg: 0.01
         noise_kg: 0.0
-    thermal:
-      ambient_c: 25.0
-      initial_c: 25.0
-    vibration:
-      sample_rate_hz: 2560.0
-      block_size: 1024        # 0.4 s per block at 2560 Hz
-
-  - id: feeder_2
-    opcua:
-      endpoint: opc.tcp://127.0.0.1:4842/factory/feeder_2
     motor:
       rated_rpm: 1750.0
-      min_rpm: 0.0
       max_rpm: 1800.0
-      time_constant_s: 0.8
-      max_accel_rpm_s: 600.0
-      initial_rpm: 0.0
+      time_constant_s: 1.0
+      max_accel_rpm_s: 300.0
     gearbox:
-      ratio: 20.0
-    screw:
-      displacement_cm3_per_rev: 250.0
-      bulk_density_kg_m3: 550.0
-    hopper:
-      capacity_kg: 30.0
-      low_switch_kg: 5.0
-      high_switch_kg: 25.0
-      initial_kg: 15.0
-    thermal:
+      ratio: 20.0             # rotor ~88 rpm at rated motor speed
+    rotor:
+      capacity_kg_h_at_rated: 300.0
+    motor_thermal:
       ambient_c: 25.0
       initial_c: 25.0
     vibration:
       sample_rate_hz: 2560.0
       block_size: 1024
+
+  - id: extruder
+    type: extruder
+    opcua:
+      endpoint: opc.tcp://127.0.0.1:4842/factory/extruder
+    hopper:
+      capacity_kg: 50.0
+      low_switch_kg: 10.0
+      high_switch_kg: 40.0
+      initial_kg: 25.0
+    motor:
+      rated_rpm: 1750.0
+      max_rpm: 1800.0
+      time_constant_s: 1.0
+      max_accel_rpm_s: 300.0
+    gearbox:
+      ratio: 15.0             # screw ~117 rpm at rated motor speed
+    screw:
+      output_kg_h_per_screw_rpm: 2.5
+    barrel:
+      initial_c: 25.0
+      setpoint_c: 200.0
+      max_setpoint_c: 280.0
+      heater_power_kw: 12.0
+      min_screw_temp_c: 160.0 # screw may not turn below this (cold-start interlock, D-28)
+      pid:                    # heater duty [%] from temperature error [K]; untuned (D-26)
+        kp: 5.0
+        ki: 0.01
+        kd: 0.0
+        out_min: 0.0
+        out_max: 100.0
+    motor_thermal:
+      ambient_c: 25.0
+      initial_c: 25.0
+    vibration:
+      sample_rate_hz: 2560.0
+      block_size: 1024
+
+  - id: water_bath
+    type: water_bath
+    opcua:
+      endpoint: opc.tcp://127.0.0.1:4843/factory/water_bath
+    bath:
+      initial_c: 20.0
+
+  - id: pelletizer
+    type: pelletizer
+    opcua:
+      endpoint: opc.tcp://127.0.0.1:4844/factory/pelletizer
+    motor:
+      rated_rpm: 1750.0
+      max_rpm: 1800.0
+      time_constant_s: 0.5
+      max_accel_rpm_s: 600.0
+    cutter:
+      knives: 24
+      strands: 8
+      strand_speed_m_min_per_rpm: 0.075  # 75 m/min at 1000 rpm
+      rotor_rpm_per_motor_rpm: 1.0       # pellet length = 0.075/24 m ~ 3.1 mm, fixed
 
 supervisor:
   db_path: data/factory.db
@@ -86,21 +117,18 @@ supervisor:
   historian_flush_period_s: 1.0
   analyzer:
     setpoint_tracking:
-      deadband_rpm: 20.0        # |sp - pv| below this counts as "tracking"
-      min_step_rpm: 50.0        # setpoint changes smaller than this are ignored
-      # How long the drive gets to reach the deadband. A healthy 0->1800 rpm step needs
-      # ~4.7 s with the placeholder drive (docs/analyzer.md section 1); 15 s is ~3x that.
-      # Interim value until the step-size-dependent timeout (D-20) replaces it.
-      timeout_s: 15.0
+      deadband_rpm: 20.0
+      min_step_rpm: 50.0
+      timeout_s: 15.0         # fixed interim value; step-size-dependent timeout is D-33
     overtemp:
-      warn_c: 90.0
+      warn_c: 90.0            # placeholders; depend on sensor location (D-23)
       alarm_c: 105.0
       hysteresis_c: 3.0
     vibration:
-      baseline_blocks: 50       # healthy blocks used to learn the baseline (D-22)
+      baseline_blocks: 50
       threshold_sigma: 4.0
   control:
-    mode: manual                # manual | mpc
+    mode: manual              # manual | baseline | mpc
     period_s: 1.0
 
 dashboard:

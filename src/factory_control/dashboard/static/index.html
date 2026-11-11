@@ -14,6 +14,7 @@
     --grid: #e6e5e0;
     --series-1: #2a78d6;
     --series-2: #eb6834;
+    --series-3: #1baf7a;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -24,6 +25,7 @@
       --grid: #2e2e2c;
       --series-1: #3987e5;
       --series-2: #d95926;
+      --series-3: #199e70;
     }
   }
   body { margin: 0; padding: 16px; background: var(--surface); color: var(--text);
@@ -40,7 +42,7 @@
   <div id="chart"></div>
 <script src="/static/vendor/uplot/uPlot.iife.min.js"></script>
 <script>
-// Placeholder: polls /api/series and redraws. Both machines are aligned onto a
+// Placeholder: polls /api/series and redraws. All devices are aligned onto a
 // shared time axis (union of timestamps, gaps as null) because uPlot expects one x array.
 // OPC UA subscriptions are report-by-exception: a sample means "the value changed to v
 // and held until the next sample". So lines are drawn stepped (hold last value), never
@@ -52,7 +54,7 @@ const chartEl = document.getElementById("chart");
 let plot = null, machines = [];
 
 function align(series) {
-  const ids = Object.keys(series).sort();
+  const ids = Object.keys(series); // server order = line order: stable colors
   const xs = [...new Set(ids.flatMap((id) => series[id].t))].sort((a, b) => a - b);
   const index = new Map(xs.map((x, i) => [x, i]));
   const ys = ids.map((id) => {
@@ -64,7 +66,7 @@ function align(series) {
 }
 
 function makePlot(ids) {
-  const colors = [css("--series-1"), css("--series-2")];
+  const colors = [css("--series-1"), css("--series-2"), css("--series-3")];
   const axis = { stroke: css("--text-muted"), grid: { stroke: css("--grid"), width: 1 },
                  ticks: { stroke: css("--grid"), width: 1 } };
   return new uPlot({
@@ -91,7 +93,7 @@ async function refresh() {
       plot = makePlot(ids);
     }
     plot.setData(data);
-    statusEl.textContent = `${ids.length} machine(s), ${data[0].length} points, updated ${new Date().toLocaleTimeString()}`;
+    statusEl.textContent = `${ids.length} motor(s), ${data[0].length} points, updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     statusEl.textContent = `no data: ${e.message}`;
   }
