@@ -1,6 +1,6 @@
 """Motor temperature (shredder and extruder motors).
 
-NOT IMPLEMENTED. Candidate: lumped model (docs/plant-model.md section 2.3, D-23)
+NOT IMPLEMENTED. Candidate: lumped model (docs/plant-model.md section 2.2, D-23)
 
     C_th * dT/dt = P_loss(I, omega) - (T - T_amb) / R_th(omega)
 """

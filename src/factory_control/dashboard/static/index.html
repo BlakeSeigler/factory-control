@@ -60,6 +60,9 @@ function align(series) {
   const ys = ids.map((id) => {
     const y = new Array(xs.length).fill(null);
     series[id].t.forEach((t, i) => { y[index.get(t)] = series[id].v[i]; });
+    // Hold last value (report-by-exception): fill gaps after the first sample so the
+    // hover legend shows the value in force at every time, not "-".
+    for (let i = 1; i < y.length; i++) if (y[i] === null) y[i] = y[i - 1];
     return y;
   });
   return { ids, data: [xs, ...ys] };

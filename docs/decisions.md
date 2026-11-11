@@ -1,74 +1,93 @@
 # Decision register
 
-Every open design choice has an ID that the code and docs refer to (`TODO(D-xx)`).
-Status: **Open** = to discuss; **Provisional** = scaffolded this way, revisit;
-**Decided** = agreed.
+This register replaces the earlier two-feeder register entirely. Each open design
+choice has an ID that the code and docs refer to (`TODO(D-xx)`).
 
-## System and topology
+**Status:** Open = to discuss; Provisional = scaffolded this way, revisit;
+Decided = agreed with Blake.
+
+## System
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-01 | How are the two machines related? | series buffer stage / parallel blend (ratio control) / independent | series (as briefed); confirm | Provisional |
-| D-02 | What feeds feeder_1's hopper? | infinite / constant / loader on switches / batch refill on low | **batch refill when feeder_1's low switch uncovers**; open: fixed vs. random response delay, overflow handling | Decided |
-| D-03 | Is mass flow measured, and where? | none / catch-weight / LIW on feeder_2 / weigh hopper at extruder / flow meter / weighed bin on feeder_1 | **load cell under feeder_1's bin**; gives ṁ₁ between refills and long-run line throughput (mpc.md §2) | Decided |
-| D-04 | Add motor current tag? | no / yes | `Motor/Current` added; sim value 0 until torque model (D-10) | Decided |
-| D-05 | Simulator process layout | one process, two servers / one process per machine + material channel | one process, two servers | Provisional |
-| D-07 | Time base and speed | real time / accelerated (`time_scale`) / shortened time constants | sim clock everywhere (done); accelerate for thermal tests | Provisional |
-| D-41 | Model machine-local protection (thermal trip, interlocks)? | no / yes | yes. A real supervisor observes trips | Open |
+| D-01 | Line composition | — | refill → shredder unit → extruder unit → water bath → pelletizer | Decided |
+| D-02 | Refill of the shredder hopper | batch on low switch; delay fixed (loader) or random (person); overflow handling | batch on low (decided); delay model open | Decided / open detail |
+| D-03 | Throughput measurement | load cell on shredder hopper | decided; output = feed − losses over switch-to-switch intervals (control.md §3) | Decided |
+| D-04 | PLC/supervisor topology | one OPC UA server per device; one supervisor with one session per PLC / client process per device | one supervisor, one session per PLC | Provisional |
+| D-05 | Simulator layout | one process with four servers / one process per device + material channel | one process (material coupling needs one clock) | Provisional |
+| D-06 | Time base and speed | real time / accelerated / shortened time constants | sim clock everywhere; accelerate for thermal tests | Provisional |
+| D-07 | Publish PLC state (Running / Reversing / Interlocked / Faulted) | yes / no | **yes**: needed so Rule 1 does not flag auto-reverse and interlocks | Open |
+| D-08 | Extra extruder sensors: melt pressure, melt temperature at die | none / pressure / both | pressure at least (screen clogging, over-pressure safety); both if MPC uses the thermal model | Open |
+| D-09 | Vibration sensors on shredder and extruder | carried over from the earlier design | keep; confirm | Provisional |
+| D-10 | Pelletizer: drive arrangement and sensors | one motor with fixed ratios (assumed) / separate feed-roll and rotor drives; current, temperature, strand-break detector? | confirm one motor; decide sensors | Open |
 
 ## OPC UA
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-06 | Subscription parameters | defaults / per-tag sampling interval, queue, deadband | per-tag; absolute deadband on noisy analogs | Open |
-| D-08 | Security | None / Sign / SignAndEncrypt + certificates | None on localhost only; SignAndEncrypt before any real network | Provisional |
-| D-09 | Out-of-range setpoint write | clamp silently (current) / reject `BadOutOfRange` / write back clamped / add `AppliedSetpoint` tag | reject + `AppliedSetpoint` | Open |
-| D-12 | Fault ground truth | separate namespace + table, quarantined from analyzer / not exposed | separate namespace (done) | Provisional |
+| D-11 | Subscription parameters | defaults / per-tag sampling, queue, deadband | per-tag; absolute deadband on noisy analogs | Open |
+| D-12 | Security | None / Sign / SignAndEncrypt + certificates | None on localhost only; SignAndEncrypt before any real network | Provisional |
+| D-13 | Out-of-range writes | clamp (current) / reject BadOutOfRange / write back / AppliedSetpoint tag | reject + applied-value tag | Open |
+| D-14 | Fault ground truth | separate namespace + table, quarantined from analyzer | as is | Provisional |
 
-## Plant model
+## Plant model (plant-model.md)
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-10 | Motor/drive fidelity | first-order lag (current) / speed loop + torque limit + mechanics / full induction machine | speed loop + torque limit | Open |
-| D-11 | Screw flow and torque | constant fill / fill vs. level, OU bulk density, pulsation | fill vs. level + OU density; pulsation optional | Open |
-| D-13 | Hopper switch model | ideal mass threshold (current) / threshold + hysteresis + debounce + crossing jitter / full geometry | thresholds in kg + hysteresis + debounce + jitter | Open |
-| D-14 | Sensor imperfections | ideal (current) / per-sensor models, switchable | per-sensor, switchable one at a time | Open |
-| D-15 | What "motor temperature" is | winding RTD / frame thermocouple; 1-node / 2-node | 2-node model, choose sensor location explicitly | Open |
-| D-21 | Vibration sampling | fs, block length (resolution vs. time resolution vs. speed smear) | depends on D-22 (envelope analysis needs higher fs) | Open |
+| D-15 | Motor/drive | first-order lag (current) / speed loop + torque limit / full machine model | speed loop + torque limit | Open |
+| D-16 | Shredder type and model | single-shaft + ram + screen / twin-shaft; stochastic torque; jams | single-shaft with screen | Open |
+| D-17 | Extruder output model | K·N / drag − pressure flow with die and screen / + starve and feed-limited intake | drag − pressure + starve + feed cap | Open |
+| D-18 | Barrel thermal model | one lumped zone (as specified) / multi-zone; shear coupling; cooling? | one zone with shear coupling; note the lack of cooling | Open |
+| D-19 | Strand dynamics | none (current) / draw-down, sag, breaks | draw-down + break probability | Open |
+| D-20 | Water bath model | pass-through (current) / heat balance | deferred as requested | Open |
+| D-21 | Hopper, switch and load-cell models | ideal (current) / hysteresis, bridging, scale noise and **vibration coupling**, refill hold | all of these | Open |
+| D-22 | Sensor imperfections | ideal / per-sensor, switchable | per-sensor, switchable one at a time | Open |
+| D-23 | Motor thermal model and sensor location | 1-node / 2-node; winding / frame | 2-node; decide location | Open |
+| D-24 | Vibration signal model and sampling | tones / impulse-resonance bearings / shredder impacts; fs, block length | impulse model + shredder impacts; fs set by D-36 | Open |
+| D-25 | Recycled-material model and losses | constant / per-batch lots; moisture, fines, rejects | per-batch lot properties + loss fraction | Open |
+
+## Local control (PLC)
+
+| ID | Question | Options | Recommendation | Status |
+|---|---|---|---|---|
+| D-26 | Barrel PID | structure (PID / PI), time-proportioning cycle, tuning method | PI + time-proportioning; tune on the model | Open |
+| D-27 | Shredder overload auto-reverse | thresholds, reverse time, retries, fault after N | standard routine; parameters to choose | Open |
+| D-28 | Extruder cold-start interlock | screw blocked below min barrel temperature (+ soak time?) | yes, with soak time | Open |
 
 ## Data
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-16 | Historian layout | narrow (current) / wide | narrow | Provisional |
-| D-17 | Vibration retention | none / ring buffer / around alarms / everything | features + around alarms; full capture as a dev switch | Open |
-| D-18 | Bus overflow policy | drop oldest (current) / block / lossless for historian | drop oldest, but count and alarm; revisit if historian completeness matters | Provisional |
+| D-29 | Historian layout | narrow (current) / wide | narrow | Provisional |
+| D-30 | Vibration retention | none / ring / around alarms / everything | features + around alarms; full capture as a dev switch | Open |
+| D-31 | Bus overflow | drop oldest (current) / block / lossless historian | drop oldest with counters | Provisional |
 
-## Analyzer
-
-| ID | Question | Options | Recommendation | Status |
-|---|---|---|---|---|
-| D-19 | Analyzer clock and stale data | sample time (current) + separate comm-loss condition | as recommended | Provisional |
-| D-20 | Rule 1 timing | fixed timeout (now 15 s) / timeout from drive dynamics / model residual | dynamics-based first, residual later | Open |
-| D-22 | Rule 3 method | band z-scores / Mahalanobis / spectral distance / ML; baseline policy | order-band z-scores, speed-binned baseline learned on command, ISO backstop | Open |
-| D-23 | Rule 2 extras | thresholds only / + rate of rise / + model residual | thresholds + rate-of-rise | Open |
-| D-24 | Alarm lifecycle | raise/clear (current) / + ack / + shelving | add ack before alarms reach the dashboard | Open |
-| D-25 | Current-based detection | absolute limit / sustained rise / none | **none**; current is logged only (analyzer.md §4) | Decided |
-| D-26 | Load cell model and refill handling | ideal / noise + screw-vibration coupling + drift; freeze vs. model-based flow during refill | noise + vibration coupling; freeze-and-hold during refill (industry practice) | Open |
-
-## Control
+## Analyzer (analyzer.md)
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-30 | How the line target is set | CLI / DB row / supervisor HTTP / supervisor as OPC UA server | supervisor HTTP endpoint | Open |
-| D-31 | Baseline controllers | Tier 0 switch logic / Tier 1 feed-forward + PI / straight to MPC | build Tiers 0 and 1 first as benchmarks (mpc.md §6) | Open |
-| D-32 | Prediction model | linear (+ disturbance state) / nonlinear | linear + disturbance state | Open |
-| D-33 | Hopper mass estimator | dead reckoning / KF with event updates + projection / MHE | KF + projection | Open |
-| D-34 | MPC tooling | cvxpy+OSQP / raw OSQP / CasADi / do-mpc | cvxpy+OSQP | Open |
-| D-35 | Ts, horizon, static motors | — | Ts = 1 s, N·Ts ≈ minutes; discuss static-motor simplification | Open |
+| D-32 | Analyzer clock and stale data | sample time + separate comm-loss condition | as recommended | Provisional |
+| D-33 | Rule 1 timing | fixed 15 s (current) / from drive dynamics / model residual | dynamics-based first | Open |
+| D-34 | Rule 1 vs. PLC overrides | suppress on PLC state / re-derive PLC logic | suppress on state (needs D-07) | Open |
+| D-35 | Rule 2 thresholds and extensions; barrel-deviation rule | thresholds / + rate-of-rise / + barrel rule | thresholds + rate-of-rise; add barrel rule | Open |
+| D-36 | Rule 3 method and baseline | band z-scores / robust stats / envelope; shredder baseline by throughput | robust, binned by speed and throughput | Open |
+| D-37 | Alarm lifecycle | raise/clear (current) / + acknowledge / + shelve | add acknowledge before the dashboard shows alarms | Open |
+| D-38 | Current-based detection | none / overload / sustained rise | none; current logged only | Decided |
+| D-39 | Additional cheap rules from fault-injection.md §3 | heater saturation, refill late, estimator consistency | discuss | Open |
+
+## Supervisory control (control.md)
+
+| ID | Question | Options | Recommendation | Status |
+|---|---|---|---|---|
+| D-40 | Baseline supervisory controller | switch logic / feed-forward + PI trim | build first as the benchmark | Open |
+| D-41 | MPC scope | whole line / shredder + extruder section / none | section MPC; pelletizer as a ratio follower outside it | Open |
+| D-42 | Estimator | dead reckoning / Kalman filter with switch events and scale | Kalman filter | Open |
+| D-43 | Pellet-size law: which throughput signal | load-cell flow / K̂·N with slow calibration | K̂·N + transport delay | Open |
+| D-44 | MPC tooling | cvxpy + OSQP / OSQP / CasADi / do-mpc | cvxpy + OSQP | Open |
+| D-45 | Line target input | CLI / DB row / HTTP on supervisor / OPC UA server on supervisor | HTTP on supervisor | Open |
 
 ## Dashboard
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-40 | Dashboard scope and coupling | read-only DB reader (current) / talks to supervisor | read-only, by construction | Provisional |
+| D-46 | Dashboard coupling | read-only DB reader (current) / talks to supervisor | read-only by construction | Provisional |

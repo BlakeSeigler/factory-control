@@ -1,114 +1,131 @@
 # Architecture
 
-## 1. What the system does
+## 1. The line
 
-A simulated plastic-pellet line with two screw feeders in series. Each feeder is
-exposed as its own OPC UA server. A supervisor connects to both as an OPC UA client,
-stores everything in SQLite, raises alarms in real time, and (later) computes RPM
-setpoints for both feeders from a target line mass flow with MPC. A small web
-dashboard reads the database.
+A plastics recycling line. Cleaned plastic goes in, pellets come out:
 
 ```
-                         SIMULATOR PROCESS (fc sim)
-  ┌──────────────────────────────────────────────────────────────────────┐
-  │  batch refill ──► [feeder_1: weighed bin → screw] ──► [feeder_2: hopper → screw] ──► extruder
-  │                  │  plant model (sim/)          │                     │
-  │           FeederServer :4841             FeederServer :4842           │
-  └──────────────────┼──────────────────────────────┼─────────────────────┘
-                     │ OPC UA (opc.tcp)             │ OPC UA (opc.tcp)
-  ┌──────────────────┼──────────────────────────────┼─────────────────────┐
-  │           MachineClient                  MachineClient                │
-  │                  └──────────┬───────────────────┘                     │
-  │                        Bus (fan-out)                                  │
-  │          ┌──────────────┬──┴───────────┬───────────────┐             │
-  │      Historian      StateCache    AnalyzerEngine    (alarms)          │
-  │          │               │              │                             │
-  │          │          Controller ─► setpoint writes via MachineClient   │
-  │          ▼                                                            │
-  │       SQLite  ◄──────────────── alarms, setpoint commands             │
-  │                    SUPERVISOR PROCESS (fc supervisor)                 │
-  └──────────┼────────────────────────────────────────────────────────────┘
-             │ read-only
-       DASHBOARD PROCESS (fc dashboard) ── HTTP ──► browser
+ batch refill
+     │  (when the shredder hopper's LOW switch uncovers)
+     ▼
+┌───────────────────────────┐    ┌──────────────────────────────────┐
+│ SHREDDER UNIT        PLC 1│    │ EXTRUDER UNIT               PLC 2│
+│ hopper on load cells      │───►│ hopper ─► screw ─► heated barrel │──► strands
+│ (2 level switches)        │    │ (2 level switches)               │      │
+│ rotor + motor             │    │ motor; barrel heater + PID       │      │
+└───────────────────────────┘    └──────────────────────────────────┘      │
+                                                                           ▼
+                         ┌───────────────────────┐    ┌───────────────────────────┐
+         pellets out ◄───│ PELLETIZER       PLC 4│◄───│ WATER BATH           PLC 3│
+                         │ feed rolls + rotor    │    │ cools strands             │
+                         │ (one motor)           │    │ water temperature sensor  │
+                         └───────────────────────┘    └───────────────────────────┘
 ```
 
-## 2. Package layout and dependency rule
+| Device | Actuators (writable over OPC UA) | Sensors / published values |
+|---|---|---|
+| Shredder | motor speed setpoint | hopper low/high switches, **hopper weight**, motor speed, current, temperature, vibration |
+| Extruder | motor speed setpoint, **barrel temperature setpoint** | hopper low/high switches, motor speed, current, temperature, vibration, barrel temperature, heater output (PID output) |
+| Water bath | none | water temperature |
+| Pelletizer | motor speed setpoint | motor speed (more sensors to decide: D-10) |
+
+**Line output** is the pellet mass flow leaving the pelletizer. It is measured
+**indirectly** from the shredder hopper's weight (D-03, control.md §3).
+
+Assumptions to confirm (decisions.md): strands pass through the bath *before*
+the cutter (a standard strand-pelletizing line), the cutter is its own device with
+its own PLC (D-10), and vibration sensors carry over from the earlier design to the
+shredder and extruder (D-09).
+
+## 2. Processes and data flow
+
+```
+SIMULATOR PROCESS  (fc sim)
+  plant models (sim/) ── coupled by material flow ──────────────────────────────
+     │            │              │              │
+  PLC shredder  PLC extruder  PLC water_bath  PLC pelletizer       (plc/)
+  :4841         :4842         :4843           :4844   ← one OPC UA server each
+     │            │              │              │
+═════╪════════════╪══════════════╪══════════════╪══════ OPC UA (opc.tcp) ═════
+     │            │              │              │
+SUPERVISOR PROCESS  (fc supervisor)
+  DeviceClient × 4 (one session per PLC)
+        └──► Bus (fan-out) ──► Historian ──► SQLite
+                           ├─► StateCache ──► Controller ──► writes via DeviceClient
+                           └─► AnalyzerEngine ──► alarms ──► Historian
+
+DASHBOARD PROCESS  (fc dashboard): reads SQLite only ──► browser
+```
+
+### PLC = OPC UA server; supervisor = client
+
+On real equipment each device has its own PLC, and modern PLCs host the OPC UA
+server themselves (Siemens S7-1500, Beckhoff TwinCAT, CODESYS-based PLCs and others).
+So each PLC is a **server**. The supervisor is **one client process with one
+session per PLC**: four independent connections. Separate client *processes* per
+device would add deployment and coordination cost and give no isolation benefit,
+because one session already fails independently of the others.
+
+### What runs where
+
+| Layer | Runs in | Examples |
+|---|---|---|
+| Plant (physics) | `sim/` | motor dynamics, hopper mass balance, barrel heat balance |
+| Device control | `plc/` | barrel temperature PID, cold-start interlock, shredder auto-reverse |
+| Supervisory | `supervisor/` | analyzer, historian, line controller (baseline / MPC) |
+| Presentation | `dashboard/` | charts |
+
+The plant has only actuators and sensors. All control logic is in a PLC or the
+supervisor. This mirrors reality, and it keeps physics code free of control
+decisions.
+
+## 3. Package layout and dependency rule
 
 ```
 src/factory_control/
-  config.py              typed config (pydantic) loaded from config/line.yaml
-  common/                contracts shared by both sides: tags, message records
-  sim/                   plant model; numpy only, knows nothing about OPC UA
-  machine/               OPC UA server per machine + simulator process loop
-  supervisor/            OPC UA clients, bus, historian, analyzer/, control/
-  storage/               SQLite schema and access
-  dashboard/             FastAPI app + static page
-  cli.py                 `fc` entry point
+  config.py          typed config; devices are a discriminated union by type
+  common/            tag contract (per device type) + message records
+  sim/
+    components/      motor, motor thermal, hopper, sensors, vibration
+    devices/         shredder, extruder, water_bath, pelletizer plant models
+    line.py          material coupling + batch refill;  faults.py
+  plc/               generic PLC (OPC UA server + scan cycle), PID block,
+                     extruder/shredder PLC logic, simulator runner
+  supervisor/        DeviceClient, bus, historian, state, analyzer/, control/
+  storage/           SQLite schema and access
+  dashboard/         FastAPI + one static page
+  cli.py             `fc` entry point
 ```
 
-Dependency direction is one-way: `sim` ← `machine`; `storage` ← `supervisor`,
-`dashboard`; everything ← `common`, `config`. **`supervisor` never imports `sim`.**
-That rule is what keeps the supervisor honest: it can only know what a real
-supervisor connected to real machines could know. The single exception is the
-sim-only ground-truth channel (D-12), which arrives over OPC UA like everything
-else and is quarantined by tag name.
+Dependencies point one way: `sim` ← `plc`; `storage` ← `supervisor`,
+`dashboard`; everything ← `common`, `config`. **`supervisor` never imports `sim`
+or `plc`**, so it can only know what a real supervisor connected to real PLCs could
+know. The only exception is the simulator's ground-truth channel (D-14). It arrives
+over OPC UA and is quarantined by tag name.
 
-## 3. Key structural decisions (detail in decisions.md)
+## 4. Structural decisions (detail in decisions.md)
 
 | ID | Decision | Current choice |
-|----|----------|----------------|
-| D-01 | Line topology | Series: feeder_1 fills feeder_2's hopper |
-| D-05 | Simulator process layout | One process, one asyncio loop, two independent OPC UA servers |
-| D-07 | Time base | Sim clock; every SourceTimestamp is sim time; `time_scale` configurable |
-| D-12 | Fault ground truth | Separate OPC UA namespace, logged to its own table, never read by the analyzer |
-| D-16 | Historian layout | Narrow table (ts, machine, tag, value), report-by-exception |
-| D-18 | Internal bus | Per-consumer bounded queues, drop-oldest on overflow |
-| D-19 | Analyzer clock | Sample (source) time, so live, accelerated and replay runs behave the same |
+|---|---|---|
+| D-01 | Line composition | shredder → extruder → water bath → pelletizer |
+| D-04 | PLC/supervisor topology | one OPC UA server per device; one supervisor with a session per PLC |
+| D-05 | Simulator layout | one process, one asyncio loop, four servers: material coupling needs one integrator and one clock |
+| D-06 | Time base | sim clock; every SourceTimestamp is sim time |
+| D-14 | Ground truth | separate OPC UA namespace, own table, never read by the analyzer |
 
-### Why one simulator process hosting two servers (D-05)
-
-The two feeders are coupled by *material*, not by data: feeder_1's discharge is
-feeder_2's inflow at every physics step. That coupling belongs inside one
-integrator with one clock. If each machine ran in its own process, we would need
-a second channel to move mass between them and would have to synchronize two
-clocks. That is extra machinery with no modeling benefit. The supervisor still sees two
-independent servers on two ports with two sessions, which is indistinguishable
-from two physical machines. Cost: one simulator crash takes down both "machines".
-For a simulator that is acceptable.
-
-### Why one supervisor process
-
-Clients, historian, analyzer and controller share one asyncio loop and talk through
-an in-process bus. That makes deployment simple, adds no serialization, and gives
-one place to reason about timing. Each component consumes its own queue and has no
-reference to the others, so splitting one out later (e.g. the analyzer as its own
-OPC UA client) is a local change. If any component task crashes, the supervisor
-exits instead of continuing with a silently dead historian or analyzer.
-
-### Why the dashboard only reads the database
-
-It cannot issue commands because it has no connection to the machines (D-40).
-Being read-only by construction is a stronger guarantee than read-only by policy.
-
-## 4. Responsibilities that are deliberately NOT in the supervisor
-
-In a real plant, protective functions (motor thermal trip, high-level stop of the
-upstream feeder, E-stop) run in the machine's own PLC/drive, because they must
-work when the network or the supervisor is down. Our analyzer only *flags*.
-Whether the simulator should model these local protections is D-41. It should,
-because their effects (a tripped motor) are part of what the supervisor observes.
-
-## 5. Status of each part
+## 5. Status
 
 | Part | Status |
-|------|--------|
-| Config, tags contract, CLI | Implemented |
-| OPC UA servers (address space, setpoint write path, sim methods) | Implemented |
-| OPC UA clients (subscribe, reconnect, write) | Implemented |
-| Historian (scalar samples, ground truth, alarms, commands) | Implemented |
-| Dashboard (RPM chart) | Implemented (placeholder) |
-| Motor model | Placeholder first-order lag + ramp limit |
-| Screw, hopper, thermal, vibration, sensors | Interfaces only; values held constant |
-| Fault injection | Data model, scenario player and OPC UA methods; faults have no physical effect yet |
-| Analyzer rules | Interfaces + routing; rules return no alarms yet |
-| Controller | Manual (no-op) works; MPC, model and estimator are stubs |
+|---|---|
+| Config, tag contract, CLI | implemented |
+| PLCs: OPC UA servers, write handling, scan cycle, sim methods | implemented |
+| PID function block | implemented and tested; barrel PID running in extruder PLC |
+| Supervisor clients, historian, rule assignment per device | implemented |
+| Dashboard (motor speeds) | implemented (placeholder) |
+| Pelletizer geometry (pellet length/mass, strand diameter) | implemented and tested |
+| Motor speed dynamics | placeholder (first-order lag + ramp) |
+| Hopper, shredder, extruder, barrel, bath, refill, motor thermal, vibration, sensors | interfaces only; values held constant |
+| Shredder auto-reverse, extruder cold-start interlock, machine state tag | TODO (D-27, D-28, D-07) |
+| Fault effects | data model, scenarios and OPC UA methods; no physical effect yet |
+| Analyzer rules | routing and assignment; rules raise nothing yet |
+| Estimator, baseline controller, MPC | stubs |

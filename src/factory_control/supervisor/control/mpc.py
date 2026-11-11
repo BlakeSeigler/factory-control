@@ -1,6 +1,6 @@
 """Model predictive controller for the line (supervisory layer).
 
-NOT IMPLEMENTED. Scope and formulation are open (docs/control.md sections 6-7,
+NOT IMPLEMENTED. Scope and formulation are open (docs/control.md sections 7-9,
 D-41). Leading candidate: one MPC over the shredder + extruder section
 
   manipulated   shredder speed, extruder speed (optionally barrel setpoint)

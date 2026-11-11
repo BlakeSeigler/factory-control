@@ -8,7 +8,7 @@ limit:
 
 Load has no effect, so jams cannot slow the motor and current stays 0. The
 recommended replacement (VFD speed loop + torque limit + mechanics, from which
-current follows) is docs/plant-model.md section 2, decision D-15.
+current follows) is docs/plant-model.md section 2.1, decision D-15.
 """
 
 from __future__ import annotations

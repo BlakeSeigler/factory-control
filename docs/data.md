@@ -7,22 +7,22 @@ supervisor is the only writer; the dashboard opens the database read-only.
 
 | Table | Row means | Written by |
 |---|---|---|
-| `machine` | a configured machine and its endpoint | supervisor start-up |
+| `device` | a configured device, its type and endpoint | supervisor start-up |
 | `sample` | scalar tag changed to `value` at `ts` (held until next row) | historian |
-| `vibration_block` | one raw accelerometer block (float32 BLOB) | not yet written (D-17) |
-| `setpoint_command` | a setpoint the supervisor issued, with `source` | control loop |
+| `vibration_block` | one raw accelerometer block (float32 BLOB) | not yet written (D-30) |
+| `setpoint_command` | a value the supervisor wrote to a writable tag, with `source` | control loop |
 | `alarm_event` | rule raised/cleared | analyzer |
 | `sim_ground_truth` | set of active injected faults changed | historian (sim only) |
 
 Timestamps are unix seconds of **sim time** (OPC UA SourceTimestamp).
 
-## D-16: narrow vs. wide samples
+## D-29: narrow vs. wide samples
 
-- **Narrow** (current): `(ts, machine_id, tag, value)`. Adding a tag needs no
+- **Narrow** (current): `(ts, device_id, tag, value)`. Adding a tag needs no
   migration, and report-by-exception data maps naturally onto it (each change is
   one row). Cost: more rows, and joining tags at a common time needs an
   as-of join.
-- **Wide**: one row per machine per tick, one column per tag. This suits analysis
+- **Wide**: one row per device per tick, one column per tag. This suits analysis
   well, but it forces a fixed sampling grid and needs a migration for every new
   tag.
 
@@ -35,15 +35,18 @@ averages, and never interpolate linearly.
 
 ## Volume estimates
 
-- Scalars: 4 changing tags × 2 machines × up to 10 Hz = 80 rows/s worst case
-  (once sensor noise exists, every publish is a change) ≈ 7 M rows/day.
-  At about 60–80 bytes per row including the index, that is roughly 0.5 GB/day.
-  Mitigations: an absolute deadband on the subscription (D-06), and downsampled
+- Scalars: about 11 continuously changing tags across the four devices (shredder
+  weight, speed, current, temperature; extruder speed, current, temperature,
+  barrel temperature, heater output; bath temperature; pelletizer speed) × up to
+  10 Hz = 110 rows/s worst case (once sensor noise exists, every publish is a
+  change) ≈ 9.5 M rows/day. At about 60–80 bytes per row including the index,
+  that is roughly 0.7 GB/day.
+  Mitigations: an absolute deadband on the subscription (D-11), and downsampled
   rollups with a retention window.
-- Raw vibration: 2560 samples/s × 4 bytes = 10 kB/s per machine ≈ 0.9 GB/day per
-  machine. Raising fs for envelope analysis multiplies this.
+- Raw vibration (shredder and extruder): 2560 samples/s × 4 bytes = 10 kB/s per
+  device ≈ 0.9 GB/day per device. Raising fs for envelope analysis multiplies this.
 
-## D-17: vibration retention options
+## D-30: vibration retention options
 
 1. Store nothing raw; store only the analyzer's per-block features (KB/day).
 2. Ring buffer: raw blocks for the last *H* hours, deleted after that.

@@ -2,96 +2,81 @@
 
 ## 1. Mechanism
 
-A fault never modifies a subsystem's internals. Each active fault contributes to a
-single `FaultEffects` record per step (`sim/faults.py`), and subsystems read only
-that record:
+A fault never edits a subsystem's internals. Each active fault contributes to one
+`FaultEffects` record per device per step (`sim/faults.py`), and plant components
+read only that record:
 
-| Knob | Read by | Healthy value |
+| Knob | Read by | Healthy |
 |---|---|---|
-| `load_torque_add_nm` | motor (via screw torque) | 0 |
-| `fill_factor_mult` | screw | 1 |
-| `copper_loss_mult` | thermal | 1 |
-| `thermal_resistance_mult` | thermal | 1 |
+| `load_torque_add_nm` | motor (via shredder rotor / extruder screw torque) | 0 |
+| `throughput_mult` | shredder rotor, extruder intake | 1 |
+| `heater_power_mult` | extruder barrel | 1 |
+| `copper_loss_mult`, `thermal_resistance_mult` | motor thermal | 1 |
 | `drive_accepts_setpoints` | motor/drive | True |
 | `extra_vibration_tones` | vibration | [] |
-| `sensor_overrides` | sensors | {} |
+| `sensor_overrides` | measurement layer | {} |
 
-Why: adding a fault never edits physics code, and the complete set of things a
-fault *can* change is listed in one place and can be reviewed. If a new fault
-needs a knob that does not exist, adding the knob is an explicit design change.
+Adding a fault never edits physics code, and the full set of things a fault can
+change is listed in one place. A fault that needs a new knob is an explicit design
+change.
 
-Sources of faults:
+Fault sources:
+- **Scenario files** (`config/scenarios/*.yaml`): timed and reproducible; used for
+  regression tests ("a shredder jam must raise Rule 1 within N s").
+- **OPC UA method** `Simulation/InjectFault` on any device:
+  `fc fault shredder shredder_jam '{"severity": 0.8}'`.
+- **Random mode (proposed)**: a Poisson process per fault type with configurable
+  mean time between failures, random severity and onset. The operator does not
+  know when a fault happens. This is the real "surprise" test.
 
-- **Scenario files** (`config/scenarios/*.yaml`): timed, scripted, reproducible.
-  Used for regression tests ("the jam scenario must raise Rule 1 within 10 s").
-- **OPC UA method** `Simulation/InjectFault`: interactive, during a live run
-  (`fc fault feeder_1 screw_jam '{"severity":0.6}'`).
-- **Random mode (proposed)**: faults drawn from a Poisson process with a
-  configurable mean time between failures, with random severity and onset. The
-  operator does not know when they happen. This is the real test of "surprise".
-
-## 2. Time profile of a fault
-
-The onset shape matters as much as the fault type, because rules detect shapes:
+## 2. Time profile
 
 | Profile | Example | What it tests |
 |---|---|---|
-| Step | breaker trip, sudden jam | detection delay |
-| Ramp (incipient) | bearing wear over hours, fouled fan | sensitivity before a threshold is crossed; baseline drift |
-| Intermittent | a sticking flight that jams once per minute | on-delay / debounce logic; alarm chatter |
-| Stochastic | switch chatter | false-alarm robustness |
+| Step | heater band burns out, hard jam | detection delay |
+| Ramp (incipient) | knife wear, screen clogging, bearing wear | sensitivity before a limit is crossed; baseline drift |
+| Intermittent | a chunk that jams the shredder once a minute | on-delays, alarm chatter |
+| Stochastic | switch chatter on flowing flakes | false-alarm robustness |
 
-Proposal: every fault takes `severity ∈ [0,1]` and `profile ∈ {step, ramp(t_ramp),
-intermittent(period, duty)}`.
+Every fault takes `severity ∈ [0,1]` and `profile ∈ {step, ramp(t), intermittent(period, duty)}`.
 
-## 3. Catalog: mechanism → observable signature → expected detection
+## 3. Catalog: mechanism → signature in OUR tags → who catches it
 
-Signatures assume the recommended models (plant-model.md §2 B, §5, §6).
+Signatures assume the recommended models (plant-model.md). "Rule 1/2/3" = setpoint
+tracking / motor overtemp / vibration (analyzer.md).
 
-| Fault | Layer | Knobs | Signature in OUR tags | Should be caught by |
-|---|---|---|---|---|
-| Screw jam (partial) | process | load torque ↑, fill ↓ | **current rises at constant speed**; speed sags once torque limit hit; temperature rises over minutes | Rule 1, later Rule 2 (current visible in data, no rule) |
-| Screw jam (hard) | process | load torque ≫ T_max | current pinned at drive limit; speed collapses to ~0 | Rule 1 |
-| Drive unresponsive | process | setpoints ignored | speed constant after setpoint change; current unchanged | Rule 1 |
-| Winding short | process | copper loss ↑ | temperature rises at same speed and load | Rule 2 (rate-of-rise earlier than threshold) |
-| Fan blocked | process | R_th ↑ | temperature rises, mostly at low speed | Rule 2 |
-| Bearing wear | process | bearing impulse train, friction ↑ | high-frequency / envelope energy ↑; slow current drift | Rule 3 |
-| Misalignment | process | 2× tone ↑ | 2× order energy ↑ | Rule 3 |
-| Hopper bridging | process | fill ↓ with material present | **current drops at constant speed**; later downstream low switch uncovers; vibration noise floor drops | no rule; visible in data, and in the load cell (feeder_1's weight stops dropping although the screw turns) if it is feeder_1 |
-| Batch late / not delivered | process | refill delayed or skipped | feeder_1 low switch uncovers, **bin weight keeps falling toward 0**, then feeder_1 starves | a "bin low, no refill" rule on weight (proposed) |
-| Sensor stuck | sensor | override | speed frozen while setpoint moves **and current changes** | Rule 1 fires; current shows the drive did respond, so the speed sensor is the suspect |
-| Sensor drift | sensor | override offset ramp | slow bias | nothing yet |
-| Switch chatter | sensor | random toggling | burst of transitions | nothing yet |
+| Fault | Device | Signature | Caught by |
+|---|---|---|---|
+| Shredder jam | shredder | current to limit; speed collapses; PLC auto-reverses (speed goes negative, then recovers) | Rule 1, **but** auto-reverse looks identical unless the PLC publishes its state (D-07, D-34) |
+| Knife wear | shredder | slow: weight-loss rate per rpm falls; current per kg rises | nothing yet (trend on load-cell flow vs. speed) |
+| Hopper bridging | extruder | output falls below K·N; extruder hopper "covered" yet the shredder-side balance stops adding up; current drops | estimator inconsistency (control.md §3); no rule yet |
+| Heater failure | extruder | barrel temperature falls; **heater output pinned at 100 %** | nothing yet; "PID saturated + error growing" is an easy rule to add |
+| Screen blockage | extruder | output per rpm falls slowly; current rises; **pressure would show it directly, but there is no pressure sensor** | nothing direct (D-08) |
+| Winding short / fan blocked | shredder, extruder | motor temperature rises at same load | Rule 2 (rate-of-rise detects it earlier) |
+| Bearing wear / misalignment | shredder, extruder | envelope / 2× energy | Rule 3 (shredder baseline is hard: plant-model.md §2.3) |
+| Drive unresponsive | any motor | speed constant after setpoint change; current unchanged | Rule 1 |
+| Strand break | pelletizer | nothing in our tags (pellets per strand change, line keeps running) | not observable (D-10: strand-break detector?) |
+| Bath overheat | water bath | water temperature rises | sensor only for now |
+| Refill late | shredder | low switch uncovered, weight keeps falling toward 0 | "low and no refill" rule on weight (proposed) |
+| Sensor stuck / drift | any | frozen or biased value | Rule 1 false cause; cross-checks (current vs. speed) |
+| Thermocouple open | extruder, motors | temperature reads full scale or a fault value; **barrel PID then cuts the heater** | plausibility check (an impossible rate of change) |
 
-Conclusions from this table, to discuss:
+Conclusions to discuss:
 
-1. **Motor current (logged, D-04) and the feeder_1 bin weight (D-03)** carry the
-   signatures that the three rules do not check. Bridging in feeder_1 shows up
-   in the weight: the screw turns but the bin stops getting lighter. The weight
-   gives a direct physical check of feeder_1: its weight-loss rate should equal
-   K₁·ω₁. A persistent mismatch means bridging, wear, or a density change.
-2. **Rule 1 alone cannot tell "drive unresponsive", "hard jam" and "speed sensor
-   stuck" apart.** All three look like "speed does not follow setpoint". Current
-   tells them apart: unchanged (drive ignored the command), pinned at the limit
-   (jam), or changing normally (sensor). Combining rules into a diagnosis is a
-   later step. For now the Rule 1 message must say *speed not following setpoint*.
-3. Sensor faults are the main source of false root causes. A temperature-sensor
-   step looks like a winding short unless rate-of-rise physics is used
-   (temperature cannot physically jump 20 °C in 0.1 s given C_th).
+1. **The three rules miss about half the catalog.** The cheapest additions are
+   heater-saturation, refill-late, and an estimator-consistency check. All use
+   tags we already have.
+2. **PLC state must be published (D-07).** Shredder auto-reverse and the extruder
+   cold-start interlock both make "speed ≠ setpoint" *correct* behavior. Without a
+   state tag (Running / Reversing / Interlocked / Faulted), Rule 1 raises false
+   alarms on every self-clearing jam.
+3. **Sensor faults cause wrong root causes.** An open thermocouple looks like a
+   barrel at 1000 °C and makes the PID cut the heaters. Real PLCs detect it as a
+   wiring fault. Our PLC model should too.
 
-## 4. Ground truth and scoring (D-12)
+## 4. Ground truth and scoring (D-14)
 
-The simulator publishes `Simulation/ActiveFaults` in a separate namespace. The
-historian stores its transitions in `sim_ground_truth`. The analyzer never reads
-it; the client tags it `sim.active_faults` and the analyzer's rule inputs never
-include that key.
-
-With ground truth stored, analyzer quality can be measured per rule from the
-database alone:
-
-- **detection rate** (faults that produced an alarm)
-- **detection delay** (fault onset → alarm raised)
-- **false alarm rate** (alarms with no matching fault, per hour of operation)
-
-These metrics turn tuning thresholds into an engineering decision that can be
-measured.
+Each PLC exposes `Simulation/ActiveFaults` in a separate namespace. The historian
+stores its transitions in `sim_ground_truth`, and the analyzer never reads it.
+Per-rule metrics then come from the database alone: detection rate, detection
+delay, and false alarms per hour.
