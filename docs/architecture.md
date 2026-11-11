@@ -113,19 +113,17 @@ over OPC UA and is quarantined by tag name.
 | D-06 | Time base | sim clock; every SourceTimestamp is sim time |
 | D-14 | Ground truth | separate OPC UA namespace, own table, never read by the analyzer |
 
-## 5. Status
+## 5. Status: scaffold only
 
 | Part | Status |
 |---|---|
-| Config, tag contract, CLI | implemented |
-| PLCs: OPC UA servers, write handling, scan cycle, sim methods | implemented |
-| PID function block | implemented and tested; barrel PID running in extruder PLC |
-| Supervisor clients, historian, rule assignment per device | implemented |
-| Dashboard (motor speeds) | implemented (placeholder) |
-| Pelletizer geometry (pellet length/mass, strand diameter) | implemented and tested |
-| Motor speed dynamics | placeholder (first-order lag + ramp) |
-| Hopper, shredder, extruder, barrel, bath, refill, motor thermal, vibration, sensors | interfaces only; values held constant |
-| Shredder auto-reverse, extruder cold-start interlock, machine state tag | TODO (D-27, D-28, D-07) |
-| Fault effects | data model, scenarios and OPC UA methods; no physical effect yet |
-| Analyzer rules | routing and assignment; rules raise nothing yet |
-| Estimator, baseline controller, MPC | stubs |
+| Config, tag contract, CLI | infrastructure, working |
+| PLC plumbing: OPC UA servers, write handling, scan cycle, sim methods | infrastructure, working |
+| Supervisor plumbing: clients, bus, historian, rule routing per device | infrastructure, working |
+| Dashboard (motor speeds) | infrastructure, placeholder page |
+| All physics (motor, hoppers, shredder, extruder, barrel, bath, pelletizer, sensors, refill, vibration) | **not implemented**: placeholders (speed = setpoint; all else held constant) |
+| PLC logic (PID, interlock, auto-reverse, state tag) | **not implemented** |
+| Fault effects and scenario playback | **not implemented** (faults can be injected and are recorded, but have no effect) |
+| Analyzer rules | **not implemented** (routing only) |
+| Estimator, baseline controller, MPC | **not implemented** |
+| Tests | none, by request |

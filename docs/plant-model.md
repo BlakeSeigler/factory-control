@@ -1,9 +1,9 @@
 # Plant model: equations, options and open questions
 
-Status: **draft for discussion.** Implemented: motor speed placeholder (§2.1 A)
-and the pelletizer geometry (§3.5, exact). Everything else is an interface that
-holds its value constant. Every number in `config/line.yaml` is a placeholder until
-it is justified here.
+Status: **draft for discussion. Nothing in this document is implemented.** The
+simulator currently uses placeholders (speed = setpoint, everything else held at
+its initial value) only so that the infrastructure carries data. Every number in
+`config/line.yaml` is a placeholder until it is justified here.
 
 Notation: n = motor speed [rpm], N = driven-shaft speed (rotor or screw) [rpm],
 i = gear ratio (motor/shaft), M = hopper mass [kg], ṁ = mass flow [kg/s or kg/h],
@@ -55,7 +55,7 @@ be seen with our sensors.
 
 ### 2.1 Motor and drive (shredder, extruder, pelletizer) (D-15)
 
-**A. First-order lag + ramp limit (implemented placeholder).**
+**A. First-order lag + ramp limit (simplest option).**
 `dn/dt = clamp((n_sp − n)/τ, −a_max, +a_max)`. Load has no effect, so a jam cannot
 slow the motor and current cannot be computed.
 
@@ -209,7 +209,7 @@ One motor (speed n) drives the feed rolls (strand speed `v = a·n`) and the roto
     pellet mass     m_p = ṁ / (s · z · n_r)                          follows mass flow
     strand diameter d   = sqrt( 4ṁ / (π · s · ρ · v) )
 
-These follow from geometry and are **implemented and tested**. With the
+These follow from geometry (not implemented yet). With the
 placeholder config (a = 0.075 m/min per rpm, z = 24, b = 1), L ≈ 3.1 mm; at
 250 kg/h and 1000 rpm, d ≈ 3.0 mm.
 
@@ -218,7 +218,7 @@ diameter, and it varies in proportion to ṁ/n. Equal pellets therefore require
 `n ∝ ṁ`. That is the "match cutting timing to mass flow" requirement, and it is a
 ratio control law (control.md §5).
 
-Strand dynamics (not implemented):
+Strand dynamics:
 - pulling faster than the extruder pushes → strands thin, then **break**;
 - pulling slower → strands sag and bunch in the bath, and can be pulled under or
   tangle.

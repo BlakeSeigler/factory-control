@@ -37,7 +37,3 @@ class DevicePlant(ABC):
 
     def vibration_block(self) -> np.ndarray | None:
         return None
-
-    def truth(self) -> dict[str, float]:
-        """Hidden true state, for scoring estimators/controllers in simulation only (D-14)."""
-        return {}

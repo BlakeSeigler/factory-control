@@ -1,15 +1,15 @@
 # Plan
 
-Each phase ends with something that runs and is tested. Physics comes before
+Each phase ends with something that runs. Physics comes before
 detection and control, because rules and controllers can only be judged against a
 plant that behaves plausibly.
 
 | Phase | Content | Depends on decisions | Done when |
 |---|---|---|---|
-| 0 | **Scaffold** (done): config, tag contract, four PLC servers, supervisor, historian, dashboard, PID block, pelletizer geometry | — | `pytest` green; dashboard shows motor speeds |
-| 1 | **Mass flow physics**: hoppers, batch refill, shredder and extruder throughput, pelletizer pass-through | D-02, D-16, D-17, D-21 | mass-balance test: refill in = pellets out + inventory change + losses, to numerical precision |
+| 0 | **Scaffold** (done): config, tag contract, four PLC servers, supervisor, historian, dashboard; placeholders only | — | dashboard shows motor speeds |
+| 1 | **Mass flow physics**: hoppers, batch refill, shredder and extruder throughput, pelletizer pass-through | D-02, D-16, D-17, D-21 | mass balance closes: refill in = pellets out + inventory change + losses |
 | 2 | **Drives and thermal**: motor model B (torque, current), motor thermal, barrel heat balance with shear coupling | D-15, D-18, D-23 | a jam stalls the motor; the barrel heats to setpoint under the PID |
-| 3 | **PLC logic**: barrel PID tuning, cold-start interlock, shredder auto-reverse, state tag | D-07, D-26, D-27, D-28 | scenario tests: cold start, jam → reverse → recover |
+| 3 | **PLC logic**: barrel PID tuning, cold-start interlock, shredder auto-reverse, state tag | D-07, D-26, D-27, D-28 | cold start, and jam → reverse → recover, behave as specified |
 | 4 | **Sensors and faults**: imperfections (incl. load-cell vibration coupling), fault effects, scenario library, random-fault mode | D-21, D-22, D-24, D-25 | each catalog fault produces its documented signature |
 | 5 | **Analyzer**: rules 1–3 (+ cheap extras), replay harness, scoring against ground truth | D-32 … D-39 | detection rate, delay and false-alarm rate reported per rule |
 | 6 | **Estimator + baseline control**: Kalman filter, feed-forward + trim, pellet-size ratio law | D-40, D-42, D-43, D-45 | target step: output settles, pellet mass within ±x % |

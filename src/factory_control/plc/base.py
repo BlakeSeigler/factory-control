@@ -136,8 +136,7 @@ class DevicePLC:
     def apply_client_writes(self) -> None:
         """Pick up changed writable tags. A direct attribute read is an in-memory lookup.
 
-        TODO(D-13): reject out-of-range writes with BadOutOfRange via a write setter
-        instead of clamping after the fact.
+        TODO(D-13): validation of out-of-range writes.
         """
         for key in self.params:
             dv = self.server.read_attribute_value(self.nodes[key].nodeid)
@@ -148,9 +147,7 @@ class DevicePLC:
 
     def on_write(self, key: str, value: float) -> None:
         if key == T.SPEED_SETPOINT.key and self.plant.motor is not None:
-            applied = self.plant.motor.command(value)
-            if applied != value:
-                log.warning("%s: speed setpoint %.1f clamped to %.1f", self.cfg.id, value, applied)
+            self.plant.motor.command(value)
 
     def local_logic(self, dt: float) -> None:
         """Device-specific control executed every scan. Default: none."""

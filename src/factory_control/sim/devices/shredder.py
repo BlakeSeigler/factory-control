@@ -64,6 +64,3 @@ class ShredderPlant(DevicePlant):
 
     def vibration_block(self) -> np.ndarray:
         return self.vibration.next_block(self.motor.state.speed_rpm)
-
-    def truth(self) -> dict[str, float]:
-        return {"hopper_mass_kg": self.hopper.state.mass_kg, "output_kg_s": self.output_kg_s}

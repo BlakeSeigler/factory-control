@@ -32,12 +32,11 @@ the PLC.
 - Logic such as interlocks and auto-reverse is written, typically in IEC 61131-3
   languages (ladder, structured text) on the PLC.
 
-**In this simulation, yes, once.** There is no PLC, so `plc/pid.py` plays the
-role of that standard block. It is implemented and tested: derivative on
-measurement (no kick on setpoint changes), anti-windup by conditional integration,
-and output clamping. The extruder PLC already runs it for the barrel. Drive speed
-loops are part of the motor model (plant-model.md §2.1). What remains is tuning,
-which needs the barrel thermal model first (D-18, D-26).
+**In this simulation, yes, once.** There is no PLC, so `plc/pid.py` must play the
+role of that standard block: one generic PID (with anti-windup and derivative on
+measurement) reused wherever a PLC needs one. It is a stub for now. Drive speed
+loops become part of the motor model (plant-model.md §2.1). After that, the work
+is tuning, which needs the barrel thermal model first (D-18, D-26).
 
 ## 3. What is measured, and what must be estimated
 

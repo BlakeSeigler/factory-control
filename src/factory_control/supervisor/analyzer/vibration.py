@@ -18,25 +18,10 @@ transients (skip blocks where speed changed > x% within the block).
 
 from __future__ import annotations
 
-import numpy as np
-
 from factory_control.common import tags as T
 from factory_control.common.messages import AlarmEvent, Sample
 from factory_control.config import VibrationAnalyzerConfig
 from factory_control.supervisor.analyzer.base import Rule
-
-
-def amplitude_spectrum(block: np.ndarray, fs_hz: float) -> tuple[np.ndarray, np.ndarray]:
-    """Single-sided amplitude spectrum with a Hann window (amplitude-corrected).
-
-    Returns (frequencies_hz, amplitude). Kept here as a utility for the rule and
-    for notebooks; the feature extraction built on it is not decided yet.
-    """
-    n = block.size
-    window = np.hanning(n)
-    spec = np.fft.rfft((block - block.mean()) * window)
-    amp = 2.0 * np.abs(spec) / window.sum()
-    return np.fft.rfftfreq(n, d=1.0 / fs_hz), amp
 
 
 class VibrationAnomalyRule(Rule):

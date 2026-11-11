@@ -31,29 +31,13 @@ def load_scenario(path: Path | str | None) -> Scenario:
         return Scenario.model_validate(yaml.safe_load(f))
 
 
-class ScenarioPlayer:
-    def __init__(self, scenario: Scenario, line: Line) -> None:
-        self.line = line
-        self.pending = sorted(scenario.events, key=lambda e: e.at_s)
-
-    def apply_due(self, elapsed_s: float) -> None:
-        while self.pending and self.pending[0].at_s <= elapsed_s:
-            ev = self.pending.pop(0)
-            fm = self.line.devices[ev.device].faults
-            if ev.action == "inject":
-                fm.inject(ev.fault, ev.params)
-            else:
-                fm.clear(ev.fault)
-            log.warning("scenario t=%.1fs %s %s %s", ev.at_s, ev.action, ev.device, ev.fault)
-
-
 async def run_simulator(
     cfg: AppConfig, scenario: Scenario, stop: asyncio.Event | None = None
 ) -> None:
     stop = stop or asyncio.Event()
     clock = SimClock()
     line = Line(cfg, clock)
-    player = ScenarioPlayer(scenario, line)
+    del scenario  # TODO: scenario playback (docs/fault-injection.md section 1)
     plcs = {did: build_plc(cfg.device(did), plant, clock) for did, plant in line.devices.items()}
 
     for plc in plcs.values():
@@ -73,7 +57,6 @@ async def run_simulator(
                 for plc in plcs.values():
                     plc.apply_client_writes()
                     plc.local_logic(dt)
-                player.apply_due(clock.elapsed)
                 line.step(dt)
 
             now = clock.now

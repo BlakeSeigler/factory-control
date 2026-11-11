@@ -1,8 +1,7 @@
 """Measurement layer: true physical state -> what instruments report (D-22).
 
-Every sensor is meant to be a deliberate model (noise, quantization, lag,
-hysteresis), switchable one at a time so its effect on the analyzer can be
-studied. PLACEHOLDERS below are ideal except for quantization.
+NOT IMPLEMENTED. Sensor models (noise, quantization, lag, hysteresis, faults) are
+to be designed (docs/plant-model.md section 2.4). PLACEHOLDERS pass values through.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from factory_control.config import LoadCellConfig
 
 
 class LevelSwitch:
-    """Point level switch. PLACEHOLDER: ideal threshold; no hysteresis, debounce, jitter."""
+    """Point level switch. PLACEHOLDER: ideal threshold."""
 
     def __init__(self, threshold_kg: float) -> None:
         self.threshold_kg = threshold_kg
@@ -21,18 +20,17 @@ class LevelSwitch:
 
 
 class LoadCell:
-    """Hopper weighing. PLACEHOLDER: ideal, quantized. To model (D-21): noise,
-    vibration coupling from the machine underneath, zero drift."""
+    """Hopper weighing (D-21). PLACEHOLDER: passes the true mass through."""
 
     def __init__(self, cfg: LoadCellConfig) -> None:
         self.cfg = cfg
 
     def read(self, mass_kg: float) -> float:
-        return round(mass_kg / self.cfg.resolution_kg) * self.cfg.resolution_kg
+        return mass_kg
 
 
 class Thermocouple:
-    """Temperature sensor. PLACEHOLDER: ideal. To model: lag, noise, open-circuit fault."""
+    """Temperature sensor. PLACEHOLDER: passes the true temperature through."""
 
     def read(self, temperature_c: float) -> float:
         return temperature_c

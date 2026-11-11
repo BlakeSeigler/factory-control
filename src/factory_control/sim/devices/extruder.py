@@ -46,12 +46,9 @@ class ExtruderPlant(DevicePlant):
         self.heater_duty_pct = 0.0
         self.output_kg_s = 0.0
 
-    # actuators -----------------------------------------------------------------------
-
     def set_heater(self, duty_pct: float) -> None:
-        self.heater_duty_pct = min(max(duty_pct, 0.0), 100.0)
-
-    # physics -------------------------------------------------------------------------
+        """Actuator driven by the PLC's barrel PID."""
+        self.heater_duty_pct = duty_pct
 
     def step(self, t: float, dt: float, inflow_kg_s: float) -> float:
         del t
@@ -75,6 +72,3 @@ class ExtruderPlant(DevicePlant):
 
     def vibration_block(self) -> np.ndarray:
         return self.vibration.next_block(self.motor.state.speed_rpm)
-
-    def truth(self) -> dict[str, float]:
-        return {"hopper_mass_kg": self.hopper.state.mass_kg, "output_kg_s": self.output_kg_s}

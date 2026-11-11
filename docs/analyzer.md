@@ -1,6 +1,6 @@
 # Analyzer: real-time rules
 
-## 0. Framework (implemented)
+## 0. Framework (infrastructure in place; no rule logic yet)
 
 - One instance of each rule **per device**, created only if the device exposes the
   tags the rule requires. Each instance owns its state. Current assignment:
@@ -102,7 +102,7 @@ fourth rule using tags we already have.
 
 ## 3. Rule 3: anomalous vibration (D-24, D-36)
 
-Pipeline per block (`amplitude_spectrum` in `analyzer/vibration.py` is implemented and tested):
+Pipeline per block (not implemented):
 
 1. **Gate.** Skip blocks during speed transients, i.e. when |Δω| within the block
    is more than a few percent. A spectrum of a changing speed is smeared and

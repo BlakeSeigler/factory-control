@@ -21,8 +21,8 @@ change is listed in one place. A fault that needs a new knob is an explicit desi
 change.
 
 Fault sources:
-- **Scenario files** (`config/scenarios/*.yaml`): timed and reproducible; used for
-  regression tests ("a shredder jam must raise Rule 1 within N s").
+- **Scenario files** (`config/scenarios/*.yaml`): timed and reproducible (file
+  format defined; playback not implemented).
 - **OPC UA method** `Simulation/InjectFault` on any device:
   `fc fault shredder shredder_jam '{"severity": 0.8}'`.
 - **Random mode (proposed)**: a Poisson process per fault type with configurable
