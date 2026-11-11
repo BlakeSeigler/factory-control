@@ -10,8 +10,8 @@ Status: **Open** = to discuss; **Provisional** = scaffolded this way, revisit;
 |---|---|---|---|---|
 | D-01 | How are the two machines related? | series buffer stage / parallel blend (ratio control) / independent | series (as briefed); confirm | Provisional |
 | D-02 | What feeds feeder_1's hopper? | infinite / constant / vacuum loader on its own switches | loader, because it adds a realistic fault | Open |
-| D-03 | Is mass flow measured? | no (volumetric) / periodic catch-weight / load cell (gravimetric) | start volumetric; keep the model ready for a load cell. **Most important open question.** | Open |
-| D-04 | Add motor current/torque tag? | no / yes | yes. Free on any VFD; makes several faults observable | Open |
+| D-03 | Is mass flow measured, and where? | none (volumetric) / periodic catch-weight / loss-in-weight on feeder_2 / throughput weigh hopper at the process inlet / solids flow meter at feeder_2 discharge | see mpc.md §2. Only the last feeder before the process matters for line accuracy | Open |
+| D-04 | Add motor current tag? | no / yes | `Motor/Current` added; sim value 0 until torque model (D-10) | Decided |
 | D-05 | Simulator process layout | one process, two servers / one process per machine + material channel | one process, two servers | Provisional |
 | D-07 | Time base and speed | real time / accelerated (`time_scale`) / shortened time constants | sim clock everywhere (done); accelerate for thermal tests | Provisional |
 | D-41 | Model machine-local protection (thermal trip, interlocks)? | no / yes | yes. A real supervisor observes trips | Open |
@@ -49,17 +49,18 @@ Status: **Open** = to discuss; **Provisional** = scaffolded this way, revisit;
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-19 | Analyzer clock and stale data | sample time (current) + separate comm-loss condition | as recommended | Provisional |
-| D-20 | Rule 1 timing | fixed timeout / timeout from drive dynamics / model residual | dynamics-based first, residual later | Open |
+| D-20 | Rule 1 timing | fixed timeout (now 15 s) / timeout from drive dynamics / model residual | dynamics-based first, residual later | Open |
 | D-22 | Rule 3 method | band z-scores / Mahalanobis / spectral distance / ML; baseline policy | order-band z-scores, speed-binned baseline learned on command, ISO backstop | Open |
 | D-23 | Rule 2 extras | thresholds only / + rate of rise / + model residual | thresholds + rate-of-rise | Open |
 | D-24 | Alarm lifecycle | raise/clear (current) / + ack / + shelving | add ack before alarms reach the dashboard | Open |
+| D-25 | Overcurrent rule limits | absolute (vs. nameplate FLA) / relative rise vs. steady baseline / both; add low-current (starving) rule? | both, gated after setpoint changes; values unset for now | Open |
 
 ## Control
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-30 | How the line target is set | CLI / DB row / supervisor HTTP / supervisor as OPC UA server | supervisor HTTP endpoint | Open |
-| D-31 | Baseline controller | none / feed-forward + PI | build it first as the benchmark | Open |
+| D-31 | Baseline controllers | Tier 0 switch logic / Tier 1 feed-forward + PI / straight to MPC | build Tiers 0 and 1 first as benchmarks (mpc.md §6) | Open |
 | D-32 | Prediction model | linear (+ disturbance state) / nonlinear | linear + disturbance state | Open |
 | D-33 | Hopper mass estimator | dead reckoning / KF with event updates + projection / MHE | KF + projection | Open |
 | D-34 | MPC tooling | cvxpy+OSQP / raw OSQP / CasADi / do-mpc | cvxpy+OSQP | Open |

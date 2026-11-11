@@ -48,32 +48,34 @@ intermittent(period, duty)}`.
 
 Signatures assume the recommended models (plant-model.md §2 B, §5, §6).
 
+Rule 4 is overcurrent (analyzer.md §4).
+
 | Fault | Layer | Knobs | Signature in OUR tags | Should be caught by |
 |---|---|---|---|---|
-| Screw jam (partial) | process | load torque ↑, fill ↓ | speed sags below setpoint once torque limit hit; temperature rises over minutes | Rule 1, later Rule 2 |
-| Screw jam (hard) | process | load torque ≫ T_max | speed collapses to ~0 | Rule 1 |
-| Drive unresponsive | process | setpoints ignored | speed constant after setpoint change | Rule 1 |
+| Screw jam (partial) | process | load torque ↑, fill ↓ | **current rises at constant speed**; speed sags once torque limit hit; temperature rises over minutes | Rule 4 first, then Rule 1, later Rule 2 |
+| Screw jam (hard) | process | load torque ≫ T_max | current pinned at drive limit; speed collapses to ~0 | Rules 4 + 1 |
+| Drive unresponsive | process | setpoints ignored | speed constant after setpoint change; current unchanged | Rule 1 |
 | Winding short | process | copper loss ↑ | temperature rises at same speed and load | Rule 2 (rate-of-rise earlier than threshold) |
 | Fan blocked | process | R_th ↑ | temperature rises, mostly at low speed | Rule 2 |
-| Bearing wear | process | bearing impulse train | high-frequency / envelope energy ↑ | Rule 3 |
+| Bearing wear | process | bearing impulse train, friction ↑ | high-frequency / envelope energy ↑; slow current drift | Rule 3 |
 | Misalignment | process | 2× tone ↑ | 2× order energy ↑ | Rule 3 |
-| Hopper bridging | process | fill ↓ with material present | **nothing directly**. Downstream hopper drains, low switch eventually uncovers. Vibration noise floor drops. | not covered by Rules 1–3 |
-| Loader failure | process | supply = 0 | feeder_1 low switch uncovers, then feeder_1 starves | not covered by Rules 1–3 |
-| Sensor stuck | sensor | override | value frozen while setpoint moves | Rule 1 (false cause!) |
+| Hopper bridging | process | fill ↓ with material present | **current drops at constant speed**; later downstream low switch uncovers; vibration noise floor drops | low-current rule (proposed, D-25) |
+| Loader failure | process | supply = 0 | feeder_1 low switch uncovers, then feeder_1 starves (current drops) | low-current rule (proposed) |
+| Sensor stuck | sensor | override | speed frozen while setpoint moves **and current changes** | Rule 1 fires; current shows the drive did respond, so the speed sensor is the suspect |
 | Sensor drift | sensor | override offset ramp | slow bias | nothing yet |
 | Switch chatter | sensor | random toggling | burst of transitions | nothing yet |
 
 Conclusions from this table, to discuss:
 
-1. **Several faults are invisible to the three rules with the current sensor
-   set.** Bridging and loader failure only show up as level switch events much
-   later. Adding **motor current** (D-04) would make jams, bridging (current
-   *drops* at the same speed) and sensor-stuck faults directly visible. Real VFDs
-   report current at no cost.
-2. **Rule 1 cannot tell "drive unresponsive", "hard jam" and "speed sensor stuck"
-   apart.** All three look like "speed does not follow setpoint". The alarm message
-   must say *speed not following setpoint*, not *drive fault*, unless more signals
-   are added.
+1. **Motor current (added, D-04) is the most informative single tag** for a
+   screw feeder. Without it, bridging and loader failure only appeared as level
+   switch events much later. With it, they appear as a current drop at constant
+   speed. This only works once the motor model computes torque (D-10).
+2. **Rule 1 alone cannot tell "drive unresponsive", "hard jam" and "speed sensor
+   stuck" apart.** All three look like "speed does not follow setpoint". Current
+   tells them apart: unchanged (drive ignored the command), pinned at the limit
+   (jam), or changing normally (sensor). Combining rules into a diagnosis is a
+   later step. For now the Rule 1 message must say *speed not following setpoint*.
 3. Sensor faults are the main source of false root causes. A temperature-sensor
    step looks like a winding short unless rate-of-rise physics is used
    (temperature cannot physically jump 20 °C in 0.1 s given C_th).

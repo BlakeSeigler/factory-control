@@ -75,7 +75,7 @@ tests/                      unit tests + an end-to-end OPC UA round-trip test
 | [opcua.md](docs/opcua.md) | how OPC UA client/server works, subscriptions, writes vs. methods, security, our address space |
 | [plant-model.md](docs/plant-model.md) | equations and options for motor, screw, hopper, thermal, vibration, sensors |
 | [fault-injection.md](docs/fault-injection.md) | fault mechanism, catalog, observability, scoring against ground truth |
-| [analyzer.md](docs/analyzer.md) | the three rules, their failure modes and options |
+| [analyzer.md](docs/analyzer.md) | the four rules, their failure modes and options |
 | [mpc.md](docs/mpc.md) | MPC from first principles, applied to this line; measurement limits |
 | [data.md](docs/data.md) | schema, report-by-exception semantics, volume, retention |
 | [decisions.md](docs/decisions.md) | every open design decision with options and a recommendation |

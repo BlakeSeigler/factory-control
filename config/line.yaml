@@ -83,7 +83,10 @@ supervisor:
     setpoint_tracking:
       deadband_rpm: 20.0        # |sp - pv| below this counts as "tracking"
       min_step_rpm: 50.0        # setpoint changes smaller than this are ignored
-      timeout_s: 5.0            # how long the drive gets to respond (D-20)
+      # How long the drive gets to reach the deadband. A healthy 0->1800 rpm step needs
+      # ~4.7 s with the placeholder drive (docs/analyzer.md section 1); 15 s is ~3x that.
+      # Interim value until the step-size-dependent timeout (D-20) replaces it.
+      timeout_s: 15.0
     overtemp:
       warn_c: 90.0
       alarm_c: 105.0
@@ -91,6 +94,11 @@ supervisor:
     vibration:
       baseline_blocks: 50       # healthy blocks used to learn the baseline (D-22)
       threshold_sigma: 4.0
+    overcurrent:                # values deliberately unset; rule disabled until chosen (D-25)
+      limit_a: null
+      rise_ratio: null
+      baseline_window_s: null
+      on_delay_s: null
   control:
     mode: manual                # manual | mpc
     period_s: 1.0

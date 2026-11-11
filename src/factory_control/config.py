@@ -120,10 +120,26 @@ class VibrationAnalyzerConfig(_Strict):
     threshold_sigma: float
 
 
+class OvercurrentConfig(_Strict):
+    """All limits optional: the rule stays disabled until they are chosen (D-25)."""
+
+    limit_a: float | None = None  # absolute limit, e.g. a % of motor nameplate FLA
+    rise_ratio: float | None = None  # alarm when I > rise_ratio * recent baseline
+    baseline_window_s: float | None = None  # length of the "recent baseline" window
+    on_delay_s: float | None = None  # condition must persist this long before RAISE
+
+    @property
+    def configured(self) -> bool:
+        return self.limit_a is not None or (
+            self.rise_ratio is not None and self.baseline_window_s is not None
+        )
+
+
 class AnalyzerConfig(_Strict):
     setpoint_tracking: SetpointTrackingConfig
     overtemp: OvertempConfig
     vibration: VibrationAnalyzerConfig
+    overcurrent: OvercurrentConfig = OvercurrentConfig()
 
 
 class ControlConfig(_Strict):

@@ -45,6 +45,7 @@ class Feeder:
             setpoint_rpm=self.motor.state.setpoint_rpm,
             speed_rpm=self.motor.state.speed_rpm,
             temperature_c=self.thermal.state.temperature_c,
+            current_a=self.motor.state.current_a,
             hopper_mass_kg=self.hopper.state.mass_kg,
         )
 

@@ -139,6 +139,7 @@ class FeederServer:
         m = self.feeder.measure()
         await self._write(T.SPEED, m.speed_rpm, now)
         await self._write(T.MOTOR_TEMP, m.temperature_c, now)
+        await self._write(T.MOTOR_CURRENT, m.current_a, now)
         await self._write(T.LEVEL_LOW, m.level_low, now)
         await self._write(T.LEVEL_HIGH, m.level_high, now)
         active = {k.value: v for k, v in self.feeder.faults.active.items()}

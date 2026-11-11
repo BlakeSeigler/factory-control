@@ -109,6 +109,7 @@ Objects/
     Motor/SpeedSetpoint           Double  RW  rpm
     Motor/Speed                   Double      rpm
     Motor/Temperature             Double      degC
+    Motor/Current                 Double      A
     Hopper/LevelLow               Boolean     True = material present at switch
     Hopper/LevelHigh              Boolean     True = material present at switch
     Vibration/SampleRate          Double      Hz

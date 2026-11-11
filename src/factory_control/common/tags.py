@@ -12,6 +12,7 @@ Address space of every feeder (browse names, all in namespace ``FEEDER_NS_URI``)
         Motor/SpeedSetpoint             Double   RW   rpm
         Motor/Speed                     Double   R    rpm
         Motor/Temperature               Double   R    degC
+        Motor/Current                   Double   R    A (drive output current)
         Hopper/LevelLow                 Boolean  R    True = material present at switch
         Hopper/LevelHigh                Boolean  R    True = material present at switch
         Vibration/SampleRate            Double   R    Hz
@@ -81,6 +82,13 @@ MOTOR_TEMP = Tag(
     unit="degC",
     description="Motor winding/frame temperature (D-15)",
 )
+MOTOR_CURRENT = Tag(
+    "motor.current_a",
+    ("Motor", "Current"),
+    ValueType.DOUBLE,
+    unit="A",
+    description="Drive output current (RMS), as reported by the VFD (D-04)",
+)
 LEVEL_LOW = Tag(
     "hopper.level_low",
     ("Hopper", "LevelLow"),
@@ -114,6 +122,7 @@ FEEDER_TAGS: tuple[Tag, ...] = (
     SPEED_SETPOINT,
     SPEED,
     MOTOR_TEMP,
+    MOTOR_CURRENT,
     LEVEL_LOW,
     LEVEL_HIGH,
     VIB_SAMPLE_RATE,

@@ -4,6 +4,7 @@ Each sensor is a deliberate model, not an identity function, because the
 analyzer must be robust to realistic measurement imperfection (D-14):
 
     speed        encoder/VFD estimate: quantization, small noise, update rate
+    current      VFD output current estimate: noise, filtering inside the drive
     temperature  RTD/PTC on the winding: sensor lag, noise
     level switch capacitive/vibrating-fork: threshold + hysteresis + debounce,
                  and pellets heap at an angle of repose, so "mass" is not "level"
@@ -24,6 +25,7 @@ class Measurements:
     speed_setpoint_rpm: float
     speed_rpm: float
     temperature_c: float
+    current_a: float
     level_low: bool
     level_high: bool
 
@@ -49,6 +51,7 @@ class SensorSuite:
         setpoint_rpm: float,
         speed_rpm: float,
         temperature_c: float,
+        current_a: float,
         hopper_mass_kg: float,
     ) -> Measurements:
         # PLACEHOLDER: ideal sensors.
@@ -56,6 +59,7 @@ class SensorSuite:
             speed_setpoint_rpm=setpoint_rpm,
             speed_rpm=speed_rpm,
             temperature_c=temperature_c,
+            current_a=current_a,
             level_low=self.low.read(hopper_mass_kg),
             level_high=self.high.read(hopper_mass_kg),
         )

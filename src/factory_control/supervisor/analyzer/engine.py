@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from factory_control.common.messages import AlarmEvent, Sample
 from factory_control.config import AnalyzerConfig
 from factory_control.supervisor.analyzer.base import Rule
+from factory_control.supervisor.analyzer.overcurrent import OvercurrentRule
 from factory_control.supervisor.analyzer.overtemp import OvertempRule
 from factory_control.supervisor.analyzer.setpoint_tracking import SetpointTrackingRule
 from factory_control.supervisor.analyzer.vibration import VibrationAnomalyRule
@@ -23,12 +24,15 @@ def build_rules(machine_id: str, cfg: AnalyzerConfig) -> list[Rule]:
         SetpointTrackingRule(machine_id, cfg.setpoint_tracking),
         OvertempRule(machine_id, cfg.overtemp),
         VibrationAnomalyRule(machine_id, cfg.vibration),
+        OvercurrentRule(machine_id, cfg.overcurrent),
     ]
 
 
 class AnalyzerEngine:
     def __init__(self, machine_ids: list[str], cfg: AnalyzerConfig, sink: AlarmSink) -> None:
         self.rules: dict[str, list[Rule]] = {m: build_rules(m, cfg) for m in machine_ids}
+        if not cfg.overcurrent.configured:
+            log.warning("overcurrent rule disabled: no limits configured (D-25)")
         self.sink = sink
         self.sample_time: dict[str, float] = dict.fromkeys(machine_ids, 0.0)
 

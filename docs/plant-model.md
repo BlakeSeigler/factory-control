@@ -220,7 +220,6 @@ drifts without bound.
 1. Series topology (D-01): is the second feeder a buffer stage in front of the
    process, or should it be a blend (two materials, fixed ratio)? This changes the
    control problem completely.
-2. Do we add motor current/torque as a tag (D-04)? Every VFD provides it, and
-   several faults are otherwise unobservable (fault-injection.md §3).
-3. Is mass flow measured anywhere (D-03)? See mpc.md §2. This is the most
-   important open question in the project.
+2. Motor current is now a tag (D-04). It only becomes informative once the motor
+   model computes torque (option B above), so D-10 is now on the critical path.
+3. Is mass flow measured, and where (D-03)? See mpc.md §2.

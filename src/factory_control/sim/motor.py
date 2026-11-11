@@ -22,6 +22,9 @@ from factory_control.config import MotorConfig
 class MotorState:
     speed_rpm: float
     setpoint_rpm: float
+    # PLACEHOLDER: stays 0 until the torque model (D-10) produces torque, from which
+    # current follows: I = sqrt(I_mag^2 + (T_m / k_t)^2). See docs/plant-model.md section 2.
+    current_a: float = 0.0
 
 
 class Motor:
