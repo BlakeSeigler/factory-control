@@ -61,7 +61,7 @@ class FeederServer:
         ns = await s.register_namespace(T.FEEDER_NS_URI)
         root = await s.nodes.objects.add_object(ns, T.ROOT_OBJECT)
         folders: dict[tuple[str, ...], Node] = {}
-        for tag in T.FEEDER_TAGS:
+        for tag in T.tags_for(self.cfg.instruments):
             parent = root
             for i in range(1, len(tag.path)):
                 key = tag.path[:i]
@@ -142,6 +142,8 @@ class FeederServer:
         await self._write(T.MOTOR_CURRENT, m.current_a, now)
         await self._write(T.LEVEL_LOW, m.level_low, now)
         await self._write(T.LEVEL_HIGH, m.level_high, now)
+        if m.hopper_weight_kg is not None:
+            await self._write(T.HOPPER_WEIGHT, m.hopper_weight_kg, now)
         active = {k.value: v for k, v in self.feeder.faults.active.items()}
         await self.server.write_attribute_value(
             self.nodes["sim.active_faults"].nodeid,

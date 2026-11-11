@@ -9,8 +9,8 @@ Status: **Open** = to discuss; **Provisional** = scaffolded this way, revisit;
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-01 | How are the two machines related? | series buffer stage / parallel blend (ratio control) / independent | series (as briefed); confirm | Provisional |
-| D-02 | What feeds feeder_1's hopper? | infinite / constant / vacuum loader on its own switches | loader, because it adds a realistic fault | Open |
-| D-03 | Is mass flow measured, and where? | none (volumetric) / periodic catch-weight / loss-in-weight on feeder_2 / throughput weigh hopper at the process inlet / solids flow meter at feeder_2 discharge | see mpc.md §2. Only the last feeder before the process matters for line accuracy | Open |
+| D-02 | What feeds feeder_1's hopper? | infinite / constant / loader on switches / batch refill on low | **batch refill when feeder_1's low switch uncovers**; open: fixed vs. random response delay, overflow handling | Decided |
+| D-03 | Is mass flow measured, and where? | none / catch-weight / LIW on feeder_2 / weigh hopper at extruder / flow meter / weighed bin on feeder_1 | **load cell under feeder_1's bin**; gives ṁ₁ between refills and long-run line throughput (mpc.md §2) | Decided |
 | D-04 | Add motor current tag? | no / yes | `Motor/Current` added; sim value 0 until torque model (D-10) | Decided |
 | D-05 | Simulator process layout | one process, two servers / one process per machine + material channel | one process, two servers | Provisional |
 | D-07 | Time base and speed | real time / accelerated (`time_scale`) / shortened time constants | sim clock everywhere (done); accelerate for thermal tests | Provisional |
@@ -53,7 +53,8 @@ Status: **Open** = to discuss; **Provisional** = scaffolded this way, revisit;
 | D-22 | Rule 3 method | band z-scores / Mahalanobis / spectral distance / ML; baseline policy | order-band z-scores, speed-binned baseline learned on command, ISO backstop | Open |
 | D-23 | Rule 2 extras | thresholds only / + rate of rise / + model residual | thresholds + rate-of-rise | Open |
 | D-24 | Alarm lifecycle | raise/clear (current) / + ack / + shelving | add ack before alarms reach the dashboard | Open |
-| D-25 | Overcurrent rule limits | absolute (vs. nameplate FLA) / relative rise vs. steady baseline / both; add low-current (starving) rule? | both, gated after setpoint changes; values unset for now | Open |
+| D-25 | Current-based detection | absolute limit / sustained rise / none | **none**; current is logged only (analyzer.md §4) | Decided |
+| D-26 | Load cell model and refill handling | ideal / noise + screw-vibration coupling + drift; freeze vs. model-based flow during refill | noise + vibration coupling; freeze-and-hold during refill (industry practice) | Open |
 
 ## Control
 

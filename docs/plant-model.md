@@ -66,8 +66,11 @@ Volumetric delivery:
     ṁ = ρ_b · V_d · (n / 60) · η_fill
 
 - `V_d` [m³/rev]: swept volume per revolution (geometry).
-- `ρ_b` [kg/m³]: bulk density of the pellets, about 500–650 for common polyolefin
-  pellets. It varies with pellet shape, regrind fraction and moisture. **This
+- `ρ_b` [kg/m³]: bulk density of the material. For virgin polyolefin pellets it
+  is about 500–650. This is a **recycling** line, and flake, regrind and
+  re-pelletized material have lower and much more variable bulk density than
+  virgin pellets. Model a wider band and occasional step changes (a new bale or
+  lot). It varies with pellet shape, regrind fraction and moisture. **This
   variation is the main reason volumetric feeders are inaccurate.** Proposed
   model: a slow Ornstein–Uhlenbeck random walk of a few percent around nominal.
 - `η_fill` ∈ [0, 1]: fill efficiency. About 1 with adequate head of material.
@@ -116,12 +119,24 @@ difference) at 300 kg/h, the drift is 6 kg/h. Feeder_2's 20 kg switch band then
 gives one switch event roughly every 3.3 h. **Level switch transitions are rare
 events. They are not a level measurement.** This drives the estimator design (mpc.md §4).
 
-**What feeds feeder_1 (D-02).** Options: (a) infinite supply (hopper always
-full: removes a dynamic); (b) constant rate; (c) a **vacuum loader** with its own
-local logic, which turns on when the low switch uncovers and off when the high
-switch covers. Option (c) is how plastics plants work. The loader cycles in batches
-(suction for t_s, then discharge), so inflow is pulsed. Recommended: (c), and it
-gives us a realistic fault: *loader failure → feeder_1 starves*.
+**What feeds feeder_1 (D-02, decided): batch refill.** When feeder_1's low switch
+uncovers, a batch of `batch_kg` is requested. It starts pouring after
+`response_delay_s` and pours in at `pour_rate_kg_h`. Open: is the delay fixed
+(automatic loader) or random (a person with a forklift)? And what happens if a
+batch would overflow the bin? That is a real spill risk.
+
+**Load cell on feeder_1's bin (D-03, decided; model is D-26).** It reports net
+material mass. Imperfections to model:
+- resolution and electronic noise;
+- **mechanical coupling**: the turning screw and the motor vibrate the weighed
+  frame, which adds noise at their frequencies. Real loss-in-weight controllers
+  filter heavily for this reason;
+- slow zero drift (temperature);
+- invalid flow readings while a batch pours in and until the scale settles.
+
+Flow is derived as `ṁ₁ = −dM₁/dt`, which is a derivative of a noisy signal. The
+filter that computes it (window length versus noise) is a design choice. It sets
+how fast the controller learns about a flow change.
 
 ## 5. Motor thermal model (D-15)
 

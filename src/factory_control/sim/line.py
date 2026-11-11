@@ -19,8 +19,10 @@ from factory_control.sim.feeder import Feeder
 class UpstreamSupply:
     """Material source for the first hopper (D-02).
 
-    PLACEHOLDER: always off. ``loader_on_switches`` should model a vacuum loader
-    with its own local on/off logic driven by the first hopper's switches.
+    PLACEHOLDER: always off. ``batch_refill`` must model: LOW switch of the first
+    hopper uncovers -> after ``response_delay_s`` a batch of ``batch_kg`` pours in
+    at ``pour_rate_kg_h``. Whether the delay is fixed or random (a person
+    responding) and what happens if the batch would overflow are open (D-02).
     """
 
     def __init__(self, cfg: UpstreamSupplyConfig) -> None:

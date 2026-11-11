@@ -48,29 +48,28 @@ intermittent(period, duty)}`.
 
 Signatures assume the recommended models (plant-model.md §2 B, §5, §6).
 
-Rule 4 is overcurrent (analyzer.md §4).
-
 | Fault | Layer | Knobs | Signature in OUR tags | Should be caught by |
 |---|---|---|---|---|
-| Screw jam (partial) | process | load torque ↑, fill ↓ | **current rises at constant speed**; speed sags once torque limit hit; temperature rises over minutes | Rule 4 first, then Rule 1, later Rule 2 |
-| Screw jam (hard) | process | load torque ≫ T_max | current pinned at drive limit; speed collapses to ~0 | Rules 4 + 1 |
+| Screw jam (partial) | process | load torque ↑, fill ↓ | **current rises at constant speed**; speed sags once torque limit hit; temperature rises over minutes | Rule 1, later Rule 2 (current visible in data, no rule) |
+| Screw jam (hard) | process | load torque ≫ T_max | current pinned at drive limit; speed collapses to ~0 | Rule 1 |
 | Drive unresponsive | process | setpoints ignored | speed constant after setpoint change; current unchanged | Rule 1 |
 | Winding short | process | copper loss ↑ | temperature rises at same speed and load | Rule 2 (rate-of-rise earlier than threshold) |
 | Fan blocked | process | R_th ↑ | temperature rises, mostly at low speed | Rule 2 |
 | Bearing wear | process | bearing impulse train, friction ↑ | high-frequency / envelope energy ↑; slow current drift | Rule 3 |
 | Misalignment | process | 2× tone ↑ | 2× order energy ↑ | Rule 3 |
-| Hopper bridging | process | fill ↓ with material present | **current drops at constant speed**; later downstream low switch uncovers; vibration noise floor drops | low-current rule (proposed, D-25) |
-| Loader failure | process | supply = 0 | feeder_1 low switch uncovers, then feeder_1 starves (current drops) | low-current rule (proposed) |
+| Hopper bridging | process | fill ↓ with material present | **current drops at constant speed**; later downstream low switch uncovers; vibration noise floor drops | no rule; visible in data, and in the load cell (feeder_1's weight stops dropping although the screw turns) if it is feeder_1 |
+| Batch late / not delivered | process | refill delayed or skipped | feeder_1 low switch uncovers, **bin weight keeps falling toward 0**, then feeder_1 starves | a "bin low, no refill" rule on weight (proposed) |
 | Sensor stuck | sensor | override | speed frozen while setpoint moves **and current changes** | Rule 1 fires; current shows the drive did respond, so the speed sensor is the suspect |
 | Sensor drift | sensor | override offset ramp | slow bias | nothing yet |
 | Switch chatter | sensor | random toggling | burst of transitions | nothing yet |
 
 Conclusions from this table, to discuss:
 
-1. **Motor current (added, D-04) is the most informative single tag** for a
-   screw feeder. Without it, bridging and loader failure only appeared as level
-   switch events much later. With it, they appear as a current drop at constant
-   speed. This only works once the motor model computes torque (D-10).
+1. **Motor current (logged, D-04) and the feeder_1 bin weight (D-03)** carry the
+   signatures that the three rules do not check. Bridging in feeder_1 shows up
+   in the weight: the screw turns but the bin stops getting lighter. The weight
+   gives a direct physical check of feeder_1: its weight-loss rate should equal
+   K₁·ω₁. A persistent mismatch means bridging, wear, or a density change.
 2. **Rule 1 alone cannot tell "drive unresponsive", "hard jam" and "speed sensor
    stuck" apart.** All three look like "speed does not follow setpoint". Current
    tells them apart: unchanged (drive ignored the command), pinned at the limit

@@ -33,7 +33,7 @@ vibration. **No tag measures mass flow.** Line flow is
 `ṁ_line = K₂ · ω₂ · η_fill,2`, and `K₂ = ρ_b·V_d/(60·i)` depends on bulk
 density, which varies by a few percent.
 
-Consequences:
+Consequences **without a scale** (the original brief; the chosen design below fixes them):
 
 - **Absolute line-flow accuracy is fundamentally open-loop.** It equals our
   knowledge of K₂. No controller, MPC included, can correct an error in K₂ with
@@ -51,12 +51,16 @@ ratios, compounding), gravimetric measurement is standard. Simple
 conveying/buffering stages, and cheap products with loose tolerances, run
 volumetric.
 
-**Where the measurement sits:** at the **last** device before the process (the
-dosing point, usually the extruder throat), because accuracy there is the
-accuracy of the product. Intermediate transfer stages (loaders, our feeder_1) are
-almost never weighed. Their only job is to keep the dosing device supplied, and
-level switches are enough for that. One measurement per material stream at the
-dosing point, not one per machine.
+**Where the measurement sits.** Material flows
+
+    supply ──► feeder_1 ──► feeder_2 ──► extruder (the "process")
+
+"The process" is whatever consumes the material, usually the extruder downstream
+of feeder_2. It does not mean the start of the line. The textbook position for a
+throughput measurement is the device that feeds the process directly (feeder_2),
+because its flow is the product's flow. Measuring further upstream also works,
+but only as a **long-run average**, because any hopper in between buffers
+short-term differences (see "Chosen design" below).
 
 Ways to measure, all at feeder_2 / the process inlet:
 
@@ -76,12 +80,41 @@ similar. A volumetric screw feeder costs a fraction of that. The business case
 is resin savings: running closer to minimum wall thickness instead of
 over-dosing to stay safe.
 
-**Recommendation:** keep the brief (volumetric, no flow sensor) as the baseline.
-Add one optional measurement on feeder_2 behind a config switch:
-a solids flow meter at the discharge (simplest, because it does not change feeder_1's
-role), or LIW (more realistic for plastics, but it turns feeder_1 into a batch
-refill device). Comparing "with" and "without" in simulation is the most
-convincing way to see what the sensor is worth.
+### Chosen design (D-02, D-03): weighed bin on feeder_1, batch refill
+
+The bin feeding feeder_1 sits on load cells, and it is refilled in batches when
+its low switch uncovers. This is a loss-in-weight arrangement on feeder_1.
+Recycled feedstock (flake, regrind, re-pelletized material) varies more in bulk
+density than virgin pellets, so a volumetric-only line would have a larger
+calibration error. That makes weighing more valuable here than in a virgin-resin
+line.
+
+What it measures, exactly:
+
+- **Between refills:** `ṁ₁ = −dM₁/dt`. This is feeder_1's true discharge, measured
+  directly, independent of bulk density.
+- **During a refill:** weight rises from inflow and outflow together, so ṁ₁ cannot
+  be separated from the inflow. Standard practice, which we will copy: freeze the
+  flow estimate (hold the last good value, run feeder_1 volumetrically) until the
+  pour ends and the scale settles.
+- **Line flow ṁ₂ is still not measured instantaneously.** feeder_2's hopper sits
+  between the scale and the extruder. However, **over any interval that starts and
+  ends at the same feeder_2 switch transition** (e.g. low switch covers → covers
+  again), feeder_2's hopper holds the same mass at both ends. Then
+  `∫ṁ₂ dt = ∫ṁ₁ dt`, exactly, and the scale measures the right-hand side.
+  This gives two things:
+  1. long-run line throughput is **measured**, not assumed;
+  2. feeder_2's calibration can be estimated as `K̂₂ = ∫ṁ₁ dt / ∫ω₂ dt` over
+     that interval. Short-term line flow then becomes `K̂₂·ω₂` with a
+     continuously re-calibrated K̂₂.
+
+So one load cell, placed on the first bin, fixes the observability problem from
+the start of this section on every timescale longer than a switch cycle. What
+remains open-loop is short-term ripple in feeder_2.
+
+Cost reasoning: my unverified estimates above. A weighed bin (load cells, frame,
+weighing electronics) is at the cheap end of the gravimetric options, because
+it is a scale, not a complete gravimetric feeder.
 
 ## 3. Prediction model (D-32, D-35)
 
@@ -114,17 +147,22 @@ and feeder_1 serves feeder_2's hopper.
 
 Steady state for target ṁ*: `ω₂* = ṁ*/K₂` and `ω₁* = ṁ*/K₁`. With placeholder
 K ≈ 0.41 (kg/h)/rpm, 300 kg/h → about 727 rpm on both. Feasibility limits:
-`ṁ* ≤ K·ω_max ≈ 742 kg/h`, and **sustained** `ṁ* ≤ ṁ_supply` (400 kg/h loader in
-config). Above the supply rate, feeder_1's hopper drains no matter what the
-controller does. The MPC should report a target above the supply rate as
-infeasible, rather than track it until the line starves.
+`ṁ* ≤ K·ω_max ≈ 742 kg/h`, and **sustained** `ṁ*` cannot exceed the average rate
+at which batches are delivered: `batch_kg / (time between batches)`, which is
+bounded by the refill response delay. Above that, feeder_1's bin drains no matter
+what the controller does. The MPC should report such a target as infeasible,
+rather than track it until the line starves. With batch refill, M₁ also has a
+sawtooth trajectory, which the model must include as a scheduled (or estimated)
+inflow.
 
 ## 4. State estimation with binary switches (D-33)
 
 The MPC needs M₁ and M₂, and no sensor measures them. Approach:
 
-- **Predict** with the model mass balance every step (dead reckoning). It drifts at
-  the calibration-error rate.
+- **M₁ is measured** by the load cell (except while a batch is pouring), so the
+  estimation problem is only M₂ and the calibration factors.
+- **Predict** M₂ with the model mass balance every step, using the *measured* ṁ₁
+  and `K̂₂·ω₂`. It drifts only at the rate of K̂₂'s error.
 - **Correct at switch transitions.** A transition is an exact-level event ("M₂
   crossed 5 kg at t"), with uncertainty from switch hysteresis and heaping.
 - **Constrain between transitions.** "Low covered, high uncovered" means
@@ -245,11 +283,11 @@ triangular (2 is false), and the rpm limits are not active at normal rates
 (1 is false). A target change is handled by feed-forward (so 4 adds little). The
 places where MPC clearly beats Tier 1:
 
-- **A target above what the supply can sustain** (e.g. 450 kg/h with a 400 kg/h
-  loader). Tier 1 runs feeder_2 at 450 while feeder_1 empties its own hopper,
-  and the line collapses minutes later. MPC with the supply constraint in its
-  model either holds the highest sustainable rate, or runs 450 for exactly as
-  long as the buffers allow and then ramps down in a planned way.
+- **A target above what batch refills can sustain**, or a late batch. Tier 1 runs
+  feeder_2 at the target while feeder_1's bin empties, and the line collapses
+  later. MPC, which sees the measured bin mass and the refill delay in its
+  model, either holds the highest sustainable rate or uses up the buffers in a
+  planned way and then ramps down.
 - **Unequal feeders**, e.g. feeder_1 smaller and close to its max rpm. MPC lowers
   the line rate in advance; PI winds up and then overshoots.
 - **Extensions**: a blend with ratio constraints, motor temperature as a

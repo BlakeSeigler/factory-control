@@ -17,8 +17,10 @@ sim:
   time_scale: 1.0             # 1.0 = real time; >1 runs faster than wall clock (D-07)
   seed: 42
   upstream_supply:            # what feeds feeder_1's hopper (D-02)
-    kind: loader_on_switches  # loader turns on at low switch, off at high switch
-    rate_kg_h: 400.0
+    kind: batch_refill        # a batch is loaded when feeder_1's low switch uncovers
+    batch_kg: 25.0            # placeholder batch size
+    response_delay_s: 60.0    # time from "bin low" until the batch starts pouring
+    pour_rate_kg_h: 3000.0    # how fast a batch pours in (25 kg takes 30 s)
 
 machines:
   - id: feeder_1
@@ -41,6 +43,9 @@ machines:
       low_switch_kg: 10.0
       high_switch_kg: 40.0
       initial_kg: 25.0
+      load_cell:              # feeder_1's bin is weighed (D-03); placeholder imperfections
+        resolution_kg: 0.01
+        noise_kg: 0.0
     thermal:
       ambient_c: 25.0
       initial_c: 25.0
@@ -94,11 +99,6 @@ supervisor:
     vibration:
       baseline_blocks: 50       # healthy blocks used to learn the baseline (D-22)
       threshold_sigma: 4.0
-    overcurrent:                # values deliberately unset; rule disabled until chosen (D-25)
-      limit_a: null
-      rise_ratio: null
-      baseline_window_s: null
-      on_delay_s: null
   control:
     mode: manual                # manual | mpc
     period_s: 1.0

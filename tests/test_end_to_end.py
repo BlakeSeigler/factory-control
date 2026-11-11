@@ -51,5 +51,11 @@ async def test_setpoint_round_trip(tmp_path):
     speeds = [v for _, v in db.series("feeder_1", T.SPEED.key, 0)]
     setpoints = [v for _, v in db.series("feeder_1", T.SPEED_SETPOINT.key, 0)]
     db.close()
+    db = Database(cfg.supervisor.db_path, readonly=True)
+    weight_f1 = db.series("feeder_1", T.HOPPER_WEIGHT.key, 0)
+    weight_f2 = db.series("feeder_2", T.HOPPER_WEIGHT.key, 0)
+    db.close()
     assert 600.0 in setpoints
     assert speeds and 550 < speeds[-1] <= 600.0
+    assert weight_f1, "load cell tag must reach the historian"
+    assert not weight_f2, "feeder_2 has no load cell"

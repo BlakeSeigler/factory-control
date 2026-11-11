@@ -112,6 +112,7 @@ Objects/
     Motor/Current                 Double      A
     Hopper/LevelLow               Boolean     True = material present at switch
     Hopper/LevelHigh              Boolean     True = material present at switch
+    Hopper/Weight                 Double      kg  (only on machines with a load cell: feeder_1)
     Vibration/SampleRate          Double      Hz
     Vibration/Waveform            Double[]    one block per update
   Simulation/                     ns = urn:factory-control:simulation (sim only)

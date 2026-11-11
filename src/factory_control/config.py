@@ -44,11 +44,19 @@ class ScrewConfig(_Strict):
     bulk_density_kg_m3: float = Field(gt=0)
 
 
+class LoadCellConfig(_Strict):
+    """Weighing system under a hopper. Imperfection parameters are placeholders (D-26)."""
+
+    resolution_kg: float = Field(gt=0, default=0.01)
+    noise_kg: float = Field(ge=0, default=0.0)
+
+
 class HopperConfig(_Strict):
     capacity_kg: float = Field(gt=0)
     low_switch_kg: float = Field(ge=0)
     high_switch_kg: float = Field(gt=0)
     initial_kg: float = Field(ge=0)
+    load_cell: LoadCellConfig | None = None  # None = hopper is not weighed
 
     @model_validator(mode="after")
     def _ordered(self) -> HopperConfig:
@@ -77,6 +85,11 @@ class MachineConfig(_Strict):
     thermal: ThermalConfig
     vibration: VibrationConfig
 
+    @property
+    def instruments(self) -> frozenset[str]:
+        """Optional instruments fitted to this machine; selects optional tags."""
+        return frozenset({"hopper_load_cell"} if self.hopper.load_cell else ())
+
 
 # --- line / sim ------------------------------------------------------------------------
 
@@ -88,8 +101,18 @@ class LineConfig(_Strict):
 
 
 class UpstreamSupplyConfig(_Strict):
-    kind: Literal["loader_on_switches", "constant"]
-    rate_kg_h: float = Field(ge=0)
+    """How material reaches the first machine's hopper (D-02).
+
+    batch_refill: when the first hopper's LOW switch uncovers, a batch of
+    ``batch_kg`` is requested; it arrives after ``response_delay_s`` (someone or
+    something has to bring it) and pours in at ``pour_rate_kg_h``.
+    """
+
+    kind: Literal["batch_refill", "constant", "none"]
+    batch_kg: float = Field(gt=0, default=25.0)
+    response_delay_s: float = Field(ge=0, default=60.0)
+    pour_rate_kg_h: float = Field(gt=0, default=3000.0)
+    constant_rate_kg_h: float = Field(ge=0, default=0.0)
 
 
 class SimConfig(_Strict):
@@ -120,26 +143,10 @@ class VibrationAnalyzerConfig(_Strict):
     threshold_sigma: float
 
 
-class OvercurrentConfig(_Strict):
-    """All limits optional: the rule stays disabled until they are chosen (D-25)."""
-
-    limit_a: float | None = None  # absolute limit, e.g. a % of motor nameplate FLA
-    rise_ratio: float | None = None  # alarm when I > rise_ratio * recent baseline
-    baseline_window_s: float | None = None  # length of the "recent baseline" window
-    on_delay_s: float | None = None  # condition must persist this long before RAISE
-
-    @property
-    def configured(self) -> bool:
-        return self.limit_a is not None or (
-            self.rise_ratio is not None and self.baseline_window_s is not None
-        )
-
-
 class AnalyzerConfig(_Strict):
     setpoint_tracking: SetpointTrackingConfig
     overtemp: OvertempConfig
     vibration: VibrationAnalyzerConfig
-    overcurrent: OvercurrentConfig = OvercurrentConfig()
 
 
 class ControlConfig(_Strict):

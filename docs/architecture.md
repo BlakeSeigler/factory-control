@@ -11,7 +11,7 @@ dashboard reads the database.
 ```
                          SIMULATOR PROCESS (fc sim)
   ┌──────────────────────────────────────────────────────────────────────┐
-  │  supply ──► [feeder_1: hopper → screw] ──► [feeder_2: hopper → screw] ──► line output
+  │  batch refill ──► [feeder_1: weighed bin → screw] ──► [feeder_2: hopper → screw] ──► extruder
   │                  │  plant model (sim/)          │                     │
   │           FeederServer :4841             FeederServer :4842           │
   └──────────────────┼──────────────────────────────┼─────────────────────┘

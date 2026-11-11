@@ -101,7 +101,7 @@ class MachineClient:
     async def _subscribe(self, client: Client) -> None:
         ns = await client.get_namespace_index(T.FEEDER_NS_URI)
         keys: dict[ua.NodeId, str] = {}
-        for tag in T.FEEDER_TAGS:
+        for tag in T.tags_for(self.cfg.instruments):
             path = [f"{ns}:{T.ROOT_OBJECT}", *(f"{ns}:{p}" for p in tag.path)]
             node = await client.nodes.objects.get_child(path)
             self._nodes[tag.key] = node

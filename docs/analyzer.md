@@ -118,40 +118,14 @@ Pipeline per block (`amplitude_spectrum` in `analyzer/vibration.py` is implement
   but the interpretable band features should come first, so that we can see
   what the learned model adds.
 
-## 4. Rule 4: motor current too high or rising abnormally (D-04, D-25)
+## 4. Motor current: logged, no rule (D-25)
 
-Tag: `Motor/Current` (A, RMS drive output current, as every VFD reports it).
-In the simulator it stays 0 until the torque model exists (plant-model.md §2 B).
-**The rule is disabled until its limits are configured**: all four values in
-`supervisor.analyzer.overcurrent` are `null`.
-
-Why current is worth more than its one rule: current ≈ torque, and torque is
-the mechanical load on the screw. It makes faults visible that the other tags
-miss (fault-injection.md §3):
-
-| Fault | Current signature |
-|---|---|
-| Jam / foreign object | sharp rise at constant speed, up to the drive's current limit |
-| Bridging / starving | **drop** at constant speed (screw runs empty) |
-| Bearing degradation | slow upward drift (friction) |
-| Speed sensor stuck | current keeps changing while "speed" is frozen |
-
-Two conditions, to decide together:
-
-- **Absolute limit.** `I ≥ limit_a` for `on_delay_s`. The natural reference is
-  the motor nameplate full-load current (FLA). Continuous operation above FLA
-  overheats the motor. The drive itself trips at its own overload limit, so
-  our limit should be lower, to warn before the drive trips.
-- **Relative rise ("a crazy increase").** `I ≥ rise_ratio × baseline`, where the
-  baseline is the median current over the last `baseline_window_s` of **steady**
-  operation. This catches a jam on a lightly loaded feeder long before the
-  absolute limit.
-
-Required gating: accelerating the screw takes extra torque, so every speed step
-produces a healthy current surge. The baseline and the relative test must ignore
-the period right after a setpoint change, otherwise every setpoint change raises
-a false alarm. A **low**-current condition (`I < fall_ratio × baseline`, for
-starving) is the natural companion rule. I left it out until we agree on it.
+`Motor/Current` is historized. Current-based detection was dropped. Note for
+later: a current **spike** while the motor accelerates is normal, as you said. A
+**sustained** rise at constant speed is not normal: it means a jam or increasing
+friction. The earlier draft only tested the second case, because it ignored the
+period after setpoint changes. If jams turn out to be hard to catch with Rule 1,
+that is the check to bring back.
 
 ## 5. Alarm lifecycle (D-24)
 

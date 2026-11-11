@@ -15,6 +15,7 @@ Address space of every feeder (browse names, all in namespace ``FEEDER_NS_URI``)
         Motor/Current                   Double   R    A (drive output current)
         Hopper/LevelLow                 Boolean  R    True = material present at switch
         Hopper/LevelHigh                Boolean  R    True = material present at switch
+        Hopper/Weight                   Double   R    kg net material; only if a load cell is fitted
         Vibration/SampleRate            Double   R    Hz
         Vibration/Waveform              Double[] R    m/s^2, one block per update
       Simulation/                       (separate namespace SIM_NS_URI, sim only, D-12)
@@ -51,6 +52,7 @@ class Tag:
     writable: bool = False
     historize: bool = True  # stored in the ``sample`` table (scalars only)
     description: str = ""
+    requires: str | None = None  # optional instrument; tag exists only if it is fitted
 
 
 MACHINE_ID = Tag(
@@ -101,6 +103,14 @@ LEVEL_HIGH = Tag(
     ValueType.BOOLEAN,
     description="High level switch; True = material present at switch",
 )
+HOPPER_WEIGHT = Tag(
+    "hopper.weight_kg",
+    ("Hopper", "Weight"),
+    ValueType.DOUBLE,
+    unit="kg",
+    description="Net material mass in the hopper from its load cell (D-03)",
+    requires="hopper_load_cell",
+)
 VIB_SAMPLE_RATE = Tag(
     "vibration.sample_rate_hz",
     ("Vibration", "SampleRate"),
@@ -125,8 +135,14 @@ FEEDER_TAGS: tuple[Tag, ...] = (
     MOTOR_CURRENT,
     LEVEL_LOW,
     LEVEL_HIGH,
+    HOPPER_WEIGHT,
     VIB_SAMPLE_RATE,
     VIB_WAVEFORM,
 )
 
 TAGS_BY_KEY: dict[str, Tag] = {t.key: t for t in FEEDER_TAGS}
+
+
+def tags_for(instruments: frozenset[str]) -> tuple[Tag, ...]:
+    """The tags a machine with the given optional instruments exposes."""
+    return tuple(t for t in FEEDER_TAGS if t.requires is None or t.requires in instruments)
