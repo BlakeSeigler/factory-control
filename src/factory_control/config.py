@@ -157,6 +157,7 @@ class PelletizerDeviceConfig(_DeviceBase):
     type: Literal["pelletizer"]
     motor: MotorConfig
     cutter: CutterConfig
+    motor_thermal: MotorThermalConfig
 
 
 DeviceConfig = Annotated[

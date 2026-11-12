@@ -10,7 +10,7 @@ Decided = agreed with Blake.
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-01 | Line composition | — | refill → shredder unit → extruder unit → water bath → pelletizer | Decided |
+| D-01 | Line composition | — | refill → shredder unit → extruder unit → water bath → pelletizer (bath before cutter, confirmed) | Decided |
 | D-02 | Refill of the shredder hopper | batch on low switch; delay fixed (loader) or random (person); overflow handling | batch on low (decided); delay model open | Decided / open detail |
 | D-03 | Throughput measurement | load cell on shredder hopper | decided; output = feed − losses over switch-to-switch intervals (control.md §3) | Decided |
 | D-04 | PLC/supervisor topology | one OPC UA server per device; one supervisor with one session per PLC / client process per device | one supervisor, one session per PLC | Provisional |
@@ -18,8 +18,8 @@ Decided = agreed with Blake.
 | D-06 | Time base and speed | real time / accelerated / shortened time constants | sim clock everywhere; accelerate for thermal tests | Provisional |
 | D-07 | Publish PLC state (Running / Reversing / Interlocked / Faulted) | yes / no | **yes**: needed so Rule 1 does not flag auto-reverse and interlocks | Open |
 | D-08 | Extra extruder sensors: melt pressure, melt temperature at die | none / pressure / both | pressure at least (screen clogging, over-pressure safety); both if MPC uses the thermal model | Open |
-| D-09 | Vibration sensors on shredder and extruder | carried over from the earlier design | keep; confirm | Provisional |
-| D-10 | Pelletizer: drive arrangement and sensors | one motor with fixed ratios (assumed) / separate feed-roll and rotor drives; current, temperature, strand-break detector? | confirm one motor; decide sensors | Open |
+| D-09 | Vibration sensors on shredder and extruder | — | yes | Decided |
+| D-10 | Pelletizer: drive arrangement and sensors | — | one motor driving feed rolls and rotor; sensors: speed, motor current, motor temperature. Strand-break detector: open, pending explanation (D-47) | Decided |
 
 ## OPC UA
 
@@ -35,7 +35,7 @@ Decided = agreed with Blake.
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-15 | Motor/drive | first-order lag (current) / speed loop + torque limit / full machine model | speed loop + torque limit | Open |
-| D-16 | Shredder type and model | single-shaft + ram + screen / twin-shaft; stochastic torque; jams | single-shaft with screen | Open |
+| D-16 | Shredder type and model | — | **single-shaft** (rotor + hydraulic ram + screen); stochastic torque and jam model still to design | Decided / model open |
 | D-17 | Extruder output model | K·N / drag − pressure flow with die and screen / + starve and feed-limited intake | drag − pressure + starve + feed cap | Open |
 | D-18 | Barrel thermal model | one lumped zone (as specified) / multi-zone; shear coupling; cooling? | one zone with shear coupling; note the lack of cooling | Open |
 | D-19 | Strand dynamics | none (current) / draw-down, sag, breaks | draw-down + break probability | Open |
@@ -91,3 +91,9 @@ Decided = agreed with Blake.
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-46 | Dashboard coupling | read-only DB reader (current) / talks to supervisor | read-only by construction | Provisional |
+
+## Added after the assumption review
+
+| ID | Question | Options | Recommendation | Status |
+|---|---|---|---|---|
+| D-47 | Strand-break detection on the pelletizer | none / optical or contact sensor per strand at the cutter inlet / infer from motor current | discuss (control.md is unaffected either way) | Open |

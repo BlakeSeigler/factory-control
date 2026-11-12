@@ -27,15 +27,14 @@ A plastics recycling line. Cleaned plastic goes in, pellets come out:
 | Shredder | motor speed setpoint | hopper low/high switches, **hopper weight**, motor speed, current, temperature, vibration |
 | Extruder | motor speed setpoint, **barrel temperature setpoint** | hopper low/high switches, motor speed, current, temperature, vibration, barrel temperature, heater output (PID output) |
 | Water bath | none | water temperature |
-| Pelletizer | motor speed setpoint | motor speed (more sensors to decide: D-10) |
+| Pelletizer | motor speed setpoint | motor speed, current, temperature |
 
 **Line output** is the pellet mass flow leaving the pelletizer. It is measured
 **indirectly** from the shredder hopper's weight (D-03, control.md §3).
 
-Assumptions to confirm (decisions.md): strands pass through the bath *before*
-the cutter (a standard strand-pelletizing line), the cutter is its own device with
-its own PLC (D-10), and vibration sensors carry over from the earlier design to the
-shredder and extruder (D-09).
+Confirmed: strands pass through the bath *before* the cutter; the cutter is its
+own device with its own PLC; vibration sensors on the shredder and extruder; the
+shredder is single-shaft (D-01, D-09, D-10, D-16).
 
 ## 2. Processes and data flow
 

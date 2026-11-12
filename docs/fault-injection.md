@@ -55,7 +55,7 @@ tracking / motor overtemp / vibration (analyzer.md).
 | Winding short / fan blocked | shredder, extruder | motor temperature rises at same load | Rule 2 (rate-of-rise detects it earlier) |
 | Bearing wear / misalignment | shredder, extruder | envelope / 2× energy | Rule 3 (shredder baseline is hard: plant-model.md §2.3) |
 | Drive unresponsive | any motor | speed constant after setpoint change; current unchanged | Rule 1 |
-| Strand break | pelletizer | nothing in our tags (pellets per strand change, line keeps running) | not observable (D-10: strand-break detector?) |
+| Strand break | pelletizer | possibly a small drop in cutter motor current (fewer strands to cut); otherwise nothing | not reliably observable without a detector (D-47) |
 | Bath overheat | water bath | water temperature rises | sensor only for now |
 | Refill late | shredder | low switch uncovered, weight keeps falling toward 0 | "low and no refill" rule on weight (proposed) |
 | Sensor stuck / drift | any | frozen or biased value | Rule 1 false cause; cross-checks (current vs. speed) |

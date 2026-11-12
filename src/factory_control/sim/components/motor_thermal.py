@@ -1,4 +1,4 @@
-"""Motor temperature (shredder and extruder motors).
+"""Motor temperature (shredder, extruder and pelletizer motors).
 
 NOT IMPLEMENTED. Candidate: lumped model (docs/plant-model.md section 2.2, D-23)
 

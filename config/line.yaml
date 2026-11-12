@@ -110,6 +110,9 @@ devices:
       strands: 8
       strand_speed_m_min_per_rpm: 0.075  # 75 m/min at 1000 rpm
       rotor_rpm_per_motor_rpm: 1.0       # pellet length = 0.075/24 m ~ 3.1 mm, fixed
+    motor_thermal:
+      ambient_c: 25.0
+      initial_c: 25.0
 
 supervisor:
   db_path: data/factory.db

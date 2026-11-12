@@ -10,7 +10,7 @@
   | shredder | yes | yes | yes |
   | extruder | yes | yes | yes |
   | water bath | no | no | no |
-  | pelletizer | yes | no (no temperature sensor) | no |
+  | pelletizer | yes | yes | no |
 
 - Rules receive only the tags they declare in `inputs`. Sim ground truth is never
   an input.

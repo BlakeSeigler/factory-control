@@ -128,6 +128,8 @@ Objects/WaterBath/                          Barrel/HeaterOutput         Double %
                                             Identification/DeviceId     String
                                             Motor/SpeedSetpoint         Double rpm  RW
                                             Motor/Speed                 Double rpm
+                                            Motor/Current               Double A
+                                            Motor/Temperature           Double degC
 
 Every server also has, in namespace urn:factory-control:simulation (sim only, D-14):
   Objects/Simulation/ActiveFaults (String JSON), InjectFault(name, params_json), ClearFaults()

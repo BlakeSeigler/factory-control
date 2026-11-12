@@ -70,7 +70,7 @@ slow the motor and current cannot be computed.
 setpoint-tracking rule a physical cause, and current and heating follow from load.
 The speed loop is **inside the drive**: it is configured, not programmed (control.md §2).
 
-### 2.2 Motor thermal (shredder, extruder) (D-23)
+### 2.2 Motor thermal (shredder, extruder, pelletizer) (D-23)
 
     C_th·dT/dt = 3·I²·R(T) + P_fe(n) − (T − T_amb)/R_th(n)
     R(T) = R_20·(1 + 0.00393·(T − 20))           copper resistance rises with T
@@ -129,10 +129,14 @@ happens if the batch overflows the hopper?
 
 ### 3.2 Shredder (D-16)
 
-Recycling lines commonly use a **single-shaft shredder with a hydraulic ram**
-(pushes material against the rotor, with a screen below that sets the output size) or a
-**twin-shaft shredder** (slow, high torque, no screen). Which one we model
-changes the torque profile and the jam behavior. Proposal: single-shaft with screen.
+**Decided: single-shaft shredder.** A rotor with knives turns against fixed
+counter-knives. A **hydraulic ram** pushes material from the hopper against the
+rotor, and a **screen** below the rotor sets the output size: pieces stay in the
+cutting chamber until they are small enough to fall through. (The alternative,
+twin-shaft, has no screen and different jam behavior.) Open for the model: is the
+ram modeled explicitly (its own pressure/position, PLC-controlled), or folded
+into the throughput law? The ram is a real control element: shredder PLCs
+typically back the ram off when the rotor current rises.
 
 Throughput:
 
@@ -227,9 +231,8 @@ So the pelletizer speed must track throughput for strand stability, not only for
 pellet size. A strand break is a common event; the cutter keeps running with one
 fewer strand.
 
-Open (D-10): one motor with fixed ratios (assumed), or separate feed-roll and
-rotor drives (allows changing pellet length too)? Which sensors does the
-pelletizer have (current? a strand-break detector)?
+Decided (D-10): one motor with fixed ratios; sensors are speed, motor current
+and motor temperature. Open (D-47): strand-break detection.
 
 ## 4. Material model (D-25)
 
@@ -241,10 +244,8 @@ reject.
 
 ## 5. Open questions (priority order)
 
-1. Confirm the assumptions: bath before cutter; cutter has its own PLC; vibration
-   sensors on shredder and extruder (D-09, D-10).
-2. Shredder type: single-shaft with ram and screen, or twin-shaft (D-16)?
-3. Refill delay: fixed or random (D-02)?
-4. Add a melt pressure sensor at the die (D-08)? It is standard on extruders, and
-   it makes screen clogging, and over-pressure (a safety issue), observable.
+1. Refill delay: fixed (automatic loader) or random (a person) (D-02)?
+2. Melt pressure and melt temperature sensors at the extruder die (D-08)?
+3. Strand-break detection on the pelletizer (D-47)?
+4. Shredder ram: explicit or folded into throughput (§3.2)?
 5. Motor model B (D-15): current and heating depend on it.

@@ -9,7 +9,7 @@ bath); a *device type* is a root object plus a set of components:
     Shredder    Identification, Hopper (+Weight), Motor, MotorHealth, Vibration
     Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel
     WaterBath   Identification, Bath
-    Pelletizer  Identification, Motor                 (sensors to confirm, D-10)
+    Pelletizer  Identification, Motor, MotorHealth
 
 Example browse path: ``Objects/Extruder/Barrel/TemperatureSetpoint``.
 Every server additionally exposes ``Objects/Simulation`` in a separate namespace
@@ -143,7 +143,7 @@ DEVICE_TYPES: dict[str, DeviceType] = {
             "extruder", "Extruder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL)
         ),
         DeviceType("water_bath", "WaterBath", (DEVICE_ID, *BATH)),
-        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR)),
+        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH)),
     )
 }
 
