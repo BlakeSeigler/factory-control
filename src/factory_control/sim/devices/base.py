@@ -1,7 +1,7 @@
 """Common shape of a device's plant model.
 
-A plant has actuators (methods called by its PLC) and sensors (``measure``). It
-contains no control logic; that is the PLC's job (plc/).
+A plant has actuators (attributes/methods its PLC drives) and sensors
+(``measure``). It contains no control logic; that is the PLC's job (plc/).
 """
 
 from __future__ import annotations
@@ -11,18 +11,19 @@ from typing import Any
 
 import numpy as np
 
-from factory_control.config import MaterialConfig
-from factory_control.sim.components.motor import Motor
+from factory_control.common import tags as T
+from factory_control.sim.components.drive import Drive
+from factory_control.sim.components.vibration import VibrationSynth
 from factory_control.sim.faults import FaultManager
 
 
 class DevicePlant(ABC):
-    motor: Motor | None = None  # set by devices that have a drive
+    drive: Drive | None = None  # motorized devices
+    vibration: VibrationSynth | None = None  # devices with an accelerometer
 
-    def __init__(self, cfg: Any, material: MaterialConfig, rng: np.random.Generator) -> None:
+    def __init__(self, cfg: Any, rng: np.random.Generator) -> None:
         self.cfg = cfg
         self.id: str = cfg.id
-        self.material = material
         self.rng = rng
         self.faults = FaultManager()
 
@@ -33,7 +34,15 @@ class DevicePlant(ABC):
 
     @abstractmethod
     def measure(self) -> dict[str, Any]:
-        """Physical sensor readings keyed by tag key (common/tags.py)."""
+        """Sensor readings keyed by tag key (common/tags.py)."""
+
+    def constants(self) -> dict[str, Any]:
+        """Values published once at start-up (e.g. sensor sample rates)."""
+        if self.vibration is None:
+            return {}
+        return {T.VIB_SAMPLE_RATE.key: self.vibration.cfg.sample_rate_hz}
 
     def vibration_block(self) -> np.ndarray | None:
-        return None
+        if self.vibration is None or self.drive is None:
+            return None
+        return self.vibration.next_block(self.drive.motor.state.speed_rpm)

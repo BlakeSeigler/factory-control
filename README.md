@@ -41,6 +41,9 @@ uv run fc write extruder motor.speed_setpoint_rpm 900
 uv run fc write extruder barrel.temperature_setpoint_c 210
 ```
 
+Out-of-range writes are rejected by the PLC (`BadOutOfRange`) and `fc write` exits
+with an error, e.g. `uv run fc write extruder motor.speed_setpoint_rpm 2500`.
+
 ```bash
 uv run fc fault shredder shredder_jam '{"severity": 0.8}'   # recorded only; faults have no effect yet
 ```
@@ -54,14 +57,14 @@ uv run ruff check . && uv run ruff format --check .
 ## Layout
 
 ```
-config/line.yaml       single config for every process (devices, endpoints, parameters)
+config/line.yaml       single config for every process (devices, endpoints, setpoint ranges)
 config/scenarios/      scripted fault scenarios
 docs/                  design docs; start with architecture.md, decisions.md, plan.md
 src/factory_control/
   common/              tag contract per device type + message records
-  sim/                 plant models: components/ (motor, hopper, sensors, ...),
+  sim/                 plant models: components/ (drive, hopper, sensors, vibration),
                        devices/ (shredder, extruder, water bath, pelletizer), line coupling, faults
-  plc/                 simulated PLCs (OPC UA server + scan cycle), PID block (stub), runner
+  plc/                 simulated PLCs (OPC UA server, setpoint range checks, scan cycle), runner
   supervisor/          OPC UA clients, bus, historian, analyzer/, control/
   storage/             SQLite schema + access
   dashboard/           FastAPI + one static page (uPlot, vendored)

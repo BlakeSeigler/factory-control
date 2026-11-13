@@ -1,7 +1,7 @@
-"""OPC UA client side for one device: connect, subscribe, reconnect, write.
+"""OPC UA client side: one ``DeviceClient`` (one session) per device PLC.
 
-The supervisor holds one ``DeviceClient`` (one OPC UA session) per device PLC, so
-an outage of one PLC cannot stall the others.
+An outage of one PLC therefore cannot stall the others. The helpers at the top
+are shared with the CLI so connection settings and write rules exist once.
 """
 
 from __future__ import annotations
@@ -15,14 +15,46 @@ from asyncua.common.subscription import DataChangeNotif
 
 from factory_control.common import tags as T
 from factory_control.common.messages import Sample
+from factory_control.config import DeviceConfig
 from factory_control.supervisor.bus import Bus
 
 log = logging.getLogger(__name__)
 
-GROUND_TRUTH_TAG = "sim.active_faults"
 # Server-side lifetime of a session after the client goes silent. Short, so a crashed
 # supervisor's session (and its subscriptions) is reclaimed quickly by the PLC.
 SESSION_TIMEOUT_MS = 30_000
+
+_VARIANT = {T.ValueType.DOUBLE: ua.VariantType.Double, T.ValueType.BOOLEAN: ua.VariantType.Boolean}
+
+
+def make_client(endpoint: str) -> Client:
+    client = Client(endpoint, timeout=4)
+    client.session_timeout = SESSION_TIMEOUT_MS
+    return client
+
+
+async def resolve_tag_nodes(client: Client, device: DeviceConfig) -> dict[str, Node]:
+    """Node for every tag of the device, keyed by tag key."""
+    ns = await client.get_namespace_index(T.DEVICE_NS_URI)
+    root = f"{ns}:{T.DEVICE_TYPES[device.type].root}"
+    return {
+        t.key: await client.nodes.objects.get_child([root, *(f"{ns}:{p}" for p in t.path)])
+        for t in device.tags
+    }
+
+
+async def resolve_sim_object(client: Client) -> tuple[Node, int]:
+    """The sim-only Simulation object and its namespace index (D-14)."""
+    ns = await client.get_namespace_index(T.SIM_NS_URI)
+    return await client.nodes.objects.get_child([f"{ns}:{T.SIM_OBJECT}"]), ns
+
+
+async def write_tag(node: Node, tag: T.Tag, value: float | bool) -> None:
+    """Write a setpoint. The PLC rejects out-of-range values: raises
+    ``ua.uaerrors.BadOutOfRange`` (a ``UaStatusCodeError``) (D-13)."""
+    if not tag.writable:
+        raise ValueError(f"{tag.key} is not writable")
+    await node.write_value(ua.Variant(value, _VARIANT[tag.vtype]))
 
 
 class _Handler:
@@ -48,28 +80,12 @@ class _Handler:
         log.warning("%s subscription status change: %s", self.device_id, status)
 
 
-async def resolve_tag_node(client: Client, device_type: str, tag: T.Tag) -> Node:
-    ns = await client.get_namespace_index(T.DEVICE_NS_URI)
-    root = T.DEVICE_TYPES[device_type].root
-    return await client.nodes.objects.get_child([f"{ns}:{root}", *(f"{ns}:{p}" for p in tag.path)])
-
-
 class DeviceClient:
-    def __init__(
-        self,
-        cfg: Any,  # a DeviceConfig
-        bus: Bus[Sample],
-        *,
-        period_ms: int,
-        include_ground_truth: bool = True,
-    ) -> None:
+    def __init__(self, cfg: DeviceConfig, bus: Bus[Sample], *, period_ms: int) -> None:
         self.cfg = cfg
         self.bus = bus
         self.period_ms = period_ms
-        self.include_ground_truth = include_ground_truth
-        self.tags = T.tags_for(cfg.type, cfg.instruments)
         self.connected = asyncio.Event()
-        self._client: Client | None = None
         self._nodes: dict[str, Node] = {}
 
     @property
@@ -80,11 +96,9 @@ class DeviceClient:
         """Connect and stay connected until ``stop`` is set, with capped backoff."""
         backoff = 1.0
         while not stop.is_set():
-            client = Client(self.cfg.opcua.endpoint, timeout=4)
-            client.session_timeout = SESSION_TIMEOUT_MS
+            client = make_client(self.cfg.opcua.endpoint)
             try:
                 async with client:
-                    self._client = client
                     await self._subscribe(client)
                     self.connected.set()
                     log.info("%s connected to %s", self.device_id, self.cfg.opcua.endpoint)
@@ -96,35 +110,24 @@ class DeviceClient:
                 log.warning("%s connection problem: %r; retry in %.0fs", self.device_id, e, backoff)
             finally:
                 self.connected.clear()
-                self._client = None
                 self._nodes.clear()
             if not stop.is_set():
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
 
     async def _subscribe(self, client: Client) -> None:
-        keys: dict[ua.NodeId, str] = {}
-        for tag in self.tags:
-            node = await resolve_tag_node(client, self.cfg.type, tag)
-            self._nodes[tag.key] = node
-            keys[node.nodeid] = tag.key
-
-        if self.include_ground_truth:
-            sim_ns = await client.get_namespace_index(T.SIM_NS_URI)
-            node = await client.nodes.objects.get_child(
-                [f"{sim_ns}:{T.SIM_OBJECT}", f"{sim_ns}:ActiveFaults"]
-            )
-            keys[node.nodeid] = GROUND_TRUTH_TAG
-
-        handler = _Handler(self.device_id, keys, self.bus)
-        sub = await client.create_subscription(self.period_ms, handler)
+        self._nodes = await resolve_tag_nodes(client, self.cfg)
+        sim, ns = await resolve_sim_object(client)
+        truth_node = await sim.get_child(f"{ns}:{T.SIM_ACTIVE_FAULTS}")
+        keys = {n.nodeid: key for key, n in self._nodes.items()}
+        keys[truth_node.nodeid] = T.GROUND_TRUTH_KEY
+        sub = await client.create_subscription(
+            self.period_ms, _Handler(self.device_id, keys, self.bus)
+        )
         # TODO(D-11): per-tag sampling intervals, queue sizes and deadbands.
-        await sub.subscribe_data_change([client.get_node(n) for n in keys])
+        await sub.subscribe_data_change([*self._nodes.values(), truth_node])
 
     async def write(self, tag_key: str, value: float) -> None:
-        tag = T.ALL_TAGS[tag_key]
-        if not tag.writable or tag not in self.tags:
-            raise ValueError(f"{tag_key} is not a writable tag of {self.device_id}")
-        if self._client is None:
+        if not self.connected.is_set():
             raise ConnectionError(f"{self.device_id} is not connected")
-        await self._nodes[tag_key].write_value(ua.Variant(float(value), ua.VariantType.Double))
+        await write_tag(self._nodes[tag_key], T.ALL_TAGS[tag_key], value)

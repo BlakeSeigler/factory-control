@@ -1,4 +1,4 @@
-"""Simulation clock. Sim time is what every OPC UA SourceTimestamp carries (D-07)."""
+"""Simulation clock. Sim time is what every OPC UA SourceTimestamp carries (D-06)."""
 
 from __future__ import annotations
 

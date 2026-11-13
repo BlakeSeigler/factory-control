@@ -1,13 +1,12 @@
 [project]
 name = "factory-control"
 version = "0.1.0"
-description = "Simulated two-feeder plastic pellet line with OPC UA, real-time analyzer, MPC and historian."
+description = "Simulated plastics recycling line (shredder, extruder, water bath, pelletizer) with per-device OPC UA PLCs, supervisor, historian and dashboard."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "asyncua>=2.1",
     "numpy>=2.0",
-    "scipy>=1.13",
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "fastapi>=0.115",

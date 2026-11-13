@@ -1,13 +1,7 @@
-"""Extruder unit: hopper + single screw (VFD motor through a gearbox) + heated barrel.
+"""Extruder unit: hopper + single screw (VFD motor) + heated barrel + die.
 
-NOT IMPLEMENTED beyond the interface (docs/plant-model.md section 3.3, D-17, D-18):
-
-  output     flood-fed: m_dot ~ k(N, die resistance, viscosity) * N_screw;
-             starve-fed when the hopper runs empty
-  barrel     C_b dT_b/dt = P_heater + P_shear - P_to_melt - P_loss
-             (screw speed heats the melt by shear: the coupling between the
-             screw-speed and barrel-temperature loops)
-  heater     actuated by the PLC's barrel PID (``set_heater``), 0-100 % duty
+NOT IMPLEMENTED (docs/plant-model.md section 3.3, D-17, D-18): screw output, barrel
+heat balance with shear heating, melt temperature.
 """
 
 from __future__ import annotations
@@ -17,61 +11,39 @@ from typing import Any
 import numpy as np
 
 from factory_control.common import tags as T
-from factory_control.config import ExtruderDeviceConfig, MaterialConfig
+from factory_control.config import ExtruderConfig
+from factory_control.sim.components.drive import Drive
 from factory_control.sim.components.hopper import Hopper
-from factory_control.sim.components.motor import Motor
-from factory_control.sim.components.motor_thermal import MotorThermal
-from factory_control.sim.components.sensors import LevelSwitch, Thermocouple
+from factory_control.sim.components.sensors import HopperSwitches, Thermocouple
 from factory_control.sim.components.vibration import VibrationSynth
 from factory_control.sim.devices.base import DevicePlant
 
 
 class ExtruderPlant(DevicePlant):
-    cfg: ExtruderDeviceConfig
+    cfg: ExtruderConfig
 
-    def __init__(
-        self, cfg: ExtruderDeviceConfig, material: MaterialConfig, rng: np.random.Generator
-    ) -> None:
-        super().__init__(cfg, material, rng)
+    def __init__(self, cfg: ExtruderConfig, rng: np.random.Generator) -> None:
+        super().__init__(cfg, rng)
         self.hopper = Hopper(cfg.hopper)
-        self.motor = Motor(cfg.motor)
-        self.thermal = MotorThermal(cfg.motor_thermal)
+        self.drive = Drive(cfg.motor, cfg.motor_thermal)
         self.vibration = VibrationSynth(cfg.vibration, rng)
-        self.low, self.high = (
-            LevelSwitch(cfg.hopper.low_switch_kg),
-            LevelSwitch(cfg.hopper.high_switch_kg),
-        )
-        self.barrel_tc = Thermocouple()
-        self.barrel_temp_c = cfg.barrel.initial_c
-        self.melt_tc = Thermocouple()
+        self.switches = HopperSwitches(cfg.hopper)
+        self.barrel_temp_c = cfg.barrel.initial_c  # PLACEHOLDER (D-18): held constant
         self.melt_temp_c = cfg.barrel.initial_c  # PLACEHOLDER (D-18): held constant
-        self.heater_duty_pct = 0.0
-        self.output_kg_s = 0.0
-
-    def set_heater(self, duty_pct: float) -> None:
-        """Actuator driven by the PLC's barrel PID."""
-        self.heater_duty_pct = duty_pct
+        self.barrel_tc = Thermocouple()
+        self.melt_tc = Thermocouple()
+        self.heater_duty_pct = 0.0  # actuator, driven by the PLC's barrel PID (D-26)
 
     def step(self, t: float, dt: float, inflow_kg_s: float) -> float:
         del t
-        demand = 0.0  # PLACEHOLDER (D-17): screw output as a function of screw speed
-        self.output_kg_s = self.hopper.step(dt, inflow_kg_s, demand)
-        self.motor.step(dt)
-        self.thermal.step(dt, self.motor.state.speed_rpm, self.motor.state.current_a)
-        # PLACEHOLDER (D-18): barrel temperature held; heater duty has no effect yet.
-        return self.output_kg_s
+        demand = 0.0  # PLACEHOLDER (D-17): screw output
+        self.drive.step(dt)
+        return self.hopper.step(dt, inflow_kg_s, demand)
 
     def measure(self) -> dict[str, Any]:
-        m = self.hopper.state.mass_kg
         return {
-            T.LEVEL_LOW.key: self.low.read(m),
-            T.LEVEL_HIGH.key: self.high.read(m),
-            T.SPEED.key: self.motor.state.speed_rpm,
-            T.MOTOR_CURRENT.key: self.motor.state.current_a,
-            T.MOTOR_TEMP.key: self.thermal.state.temperature_c,
+            **self.switches.measure(self.hopper.state.mass_kg),
+            **self.drive.measure(),
             T.BARREL_TEMP.key: self.barrel_tc.read(self.barrel_temp_c),
             T.MELT_TEMP.key: self.melt_tc.read(self.melt_temp_c),
         }
-
-    def vibration_block(self) -> np.ndarray:
-        return self.vibration.next_block(self.motor.state.speed_rpm)

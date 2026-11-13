@@ -1,7 +1,8 @@
 """Simulator process: the whole line in one asyncio loop, one PLC + OPC UA server per device.
 
 Timing (D-06): physics advances in fixed steps of ``physics_dt_s`` of sim time and
-every PLC scans once per step; values are published every ``publish_period_s``;
+every PLC scans once per step (setpoint writes arrive between publish ticks, via
+the OPC UA write handler); values are published every ``publish_period_s``;
 vibration blocks every ``block_size / sample_rate_hz``. Wall-clock pacing is
 ``sim_dt / time_scale`` with absolute deadlines, so pacing does not drift.
 """
@@ -13,9 +14,7 @@ import logging
 import time
 from pathlib import Path
 
-import yaml
-
-from factory_control.config import AppConfig
+from factory_control.config import AppConfig, load_yaml
 from factory_control.plc import build_plc
 from factory_control.sim.clock import SimClock
 from factory_control.sim.faults import Scenario
@@ -25,10 +24,7 @@ log = logging.getLogger(__name__)
 
 
 def load_scenario(path: Path | str | None) -> Scenario:
-    if path is None:
-        return Scenario(name="none")
-    with open(path) as f:
-        return Scenario.model_validate(yaml.safe_load(f))
+    return Scenario(name="none") if path is None else load_yaml(Scenario, path)
 
 
 async def run_simulator(
@@ -55,8 +51,7 @@ async def run_simulator(
         while not stop.is_set():
             for _ in range(steps_per_publish):
                 for plc in plcs.values():
-                    plc.apply_client_writes()
-                    plc.local_logic(dt)
+                    plc.scan(dt)
                 line.step(dt)
 
             now = clock.now

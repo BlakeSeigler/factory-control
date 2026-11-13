@@ -41,13 +41,12 @@ reach the deadband faster than:
     t_settle   = τ · ln( min(|Δ|, a·τ) / δ )  (exponential tail into deadband δ)
     T_expected = t_ramp + t_settle
 
-With the placeholder shredder/extruder drives (a = 300 rpm/s, τ = 1.0 s,
-δ = 20 rpm), a 0 → 1800 rpm step needs 5.0 s + 2.7 s ≈ 7.7 s. **The timeout is
-15 s** (about 2× that worst case). A small step (e.g. 100 rpm, T_expected ≈ 1.6 s)
-then gets almost 10× its expected time before anyone is told. Any fixed timeout
-trades false alarms on large steps against slow detection on small ones, and the
-devices have different drives (the pelletizer is faster). Options B and C remove
-that trade-off.
+Example: with a = 300 rpm/s, τ = 1.0 s and δ = 20 rpm, a 0 → 1800 rpm step needs
+5.0 s + 2.7 s ≈ 7.7 s, while a 100 rpm step needs about 1.6 s. A fixed timeout long
+enough for the large step (e.g. 15 s) gives the small step almost 10× its
+expected time before anyone is told. Any fixed timeout trades false alarms on
+large steps against slow detection on small ones, and the devices have different
+drives. Options B and C remove that trade-off.
 
 **Option B: timeout scaled from the drive's configured dynamics (recommended
 first).** `T_allow = k · T_expected(|Δ|) + margin`. It needs only the drive's ramp
@@ -91,11 +90,11 @@ spikes, such as a sensor glitch.
   check: a slope larger than `P_max / C_th` is physically impossible, so a sensor
   fault can be told apart from a real temperature rise.
 - **Expected temperature for current load.** Using the thermal model with measured
-  speed (and current, if added), predict T and alarm on the residual. This is the
+  speed and current, predict T and alarm on the residual. This is the
   most sensitive option, and the most model-dependent.
 
 Thresholds depend on what the sensor measures (winding or frame, plant-model.md
-§2.2). Applies to the shredder and extruder motors. **Barrel** temperature is a
+§2.2). Applies to every motor (shredder, extruder, pelletizer). **Barrel** temperature is a
 separate concern: too hot degrades the polymer. A barrel-deviation rule (|T_b −
 setpoint| too large for too long, or heater pinned at 0 % / 100 %) is a natural
 fourth rule using tags we already have.
@@ -146,12 +145,11 @@ Pipeline per block (not implemented):
 
 ## 4. Motor current: logged, no rule (D-38)
 
-`Motor/Current` is historized. Current-based detection was dropped. Note for
-later: a current **spike** while the motor accelerates is normal, as you said. A
-**sustained** rise at constant speed is not normal: it means a jam or increasing
-friction. The earlier draft only tested the second case, because it ignored the
-period after setpoint changes. If jams turn out to be hard to catch with Rule 1,
-that is the check to bring back.
+`Motor/Current` is historized; there is no current-based rule (D-38). For
+reference: a current **spike** while a motor accelerates is normal, but a
+**sustained** rise at constant speed indicates a jam or increasing friction. If
+jams turn out to be hard to catch with Rule 1, a sustained-rise check (ignoring
+the period after setpoint changes) is the candidate to add.
 
 ## 5. Alarm lifecycle (D-37)
 

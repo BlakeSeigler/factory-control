@@ -16,7 +16,6 @@ from factory_control.config import HopperConfig
 @dataclass(slots=True)
 class HopperState:
     mass_kg: float
-    spilled_kg: float = 0.0
 
 
 class Hopper:

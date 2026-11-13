@@ -15,6 +15,7 @@ from pathlib import Path
 from factory_control.common.messages import AlarmEvent, SetpointCommand
 
 SampleRow = tuple[float, str, str, float, int]  # ts, device_id, tag, value, status
+TruthRow = tuple[float, str, str]  # ts, device_id, active_faults JSON
 
 
 class Database:
@@ -46,19 +47,24 @@ class Database:
                 list(devices),
             )
 
-    def insert_samples(self, rows: list[SampleRow]) -> None:
+    def insert_batch(self, samples: list[SampleRow], truth: list[TruthRow]) -> None:
+        """Samples and ground-truth transitions in one transaction."""
         with self.conn:
             self.conn.executemany(
                 "INSERT INTO sample (ts, device_id, tag, value, status) VALUES (?, ?, ?, ?, ?)",
-                rows,
+                samples,
+            )
+            self.conn.executemany(
+                "INSERT INTO sim_ground_truth (ts, device_id, active_faults) VALUES (?, ?, ?)",
+                truth,
             )
 
-    def insert_setpoint_command(self, cmd: SetpointCommand) -> None:
+    def insert_setpoint_commands(self, cmds: list[SetpointCommand]) -> None:
         with self.conn:
-            self.conn.execute(
+            self.conn.executemany(
                 "INSERT INTO setpoint_command (ts, device_id, tag, value, source) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (cmd.ts, cmd.device_id, cmd.tag, cmd.value, cmd.source),
+                [(c.ts, c.device_id, c.tag, c.value, c.source) for c in cmds],
             )
 
     def insert_alarm_event(self, ev: AlarmEvent) -> None:
@@ -66,28 +72,11 @@ class Database:
             self.conn.execute(
                 "INSERT INTO alarm_event (ts, device_id, rule, severity, transition, message, "
                 "details) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    ev.ts,
-                    ev.device_id,
-                    ev.rule,
-                    ev.severity.value,
-                    ev.transition.value,
-                    ev.message,
-                    json.dumps(ev.details),
-                ),
-            )
-
-    def insert_ground_truth(self, ts: float, device_id: str, active_faults_json: str) -> None:
-        with self.conn:
-            self.conn.execute(
-                "INSERT INTO sim_ground_truth (ts, device_id, active_faults) VALUES (?, ?, ?)",
-                (ts, device_id, active_faults_json),
-            )
+                (ev.ts, ev.device_id, ev.rule, ev.severity.value, ev.transition.value,
+                 ev.message, json.dumps(ev.details)),
+            )  # fmt: skip
 
     # -- reader -------------------------------------------------------------------------
-
-    def device_ids(self) -> list[str]:
-        return [r[0] for r in self.conn.execute("SELECT id FROM device ORDER BY id")]
 
     def series(self, device_id: str, tag: str, since: float) -> list[tuple[float, float]]:
         cur = self.conn.execute(
@@ -96,6 +85,12 @@ class Database:
         )
         return cur.fetchall()
 
-    def latest_ts(self) -> float | None:
-        row = self.conn.execute("SELECT MAX(ts) FROM sample").fetchone()
-        return row[0] if row else None
+    def latest_ts(self, device_ids: list[str], tag: str) -> float | None:
+        """Newest sample time of ``tag`` across devices (answered by the index)."""
+        latest = [
+            self.conn.execute(
+                "SELECT MAX(ts) FROM sample WHERE device_id = ? AND tag = ?", (did, tag)
+            ).fetchone()[0]
+            for did in device_ids
+        ]
+        return max((t for t in latest if t is not None), default=None)

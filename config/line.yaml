@@ -1,52 +1,34 @@
 # Line configuration: the single source of truth for every process.
 #
 # Material path (docs/architecture.md):
-#   batch refill -> shredder unit -> extruder unit -> water bath -> pelletizer -> pellets
+#   refill -> shredder -> extruder -> water bath -> pelletizer -> pellets
 #
-# Physical parameter values are PLACEHOLDERS chosen only to be in a plausible order
-# of magnitude. Each is an open item in docs/plant-model.md until justified.
+# Scaffold: only values that code reads today. Model parameters are added with the
+# models that use them (docs/plant-model.md). All numbers are placeholders.
 
 line:
   name: recycling-line-1
   material_path: [shredder, extruder, water_bath, pelletizer]
 
 sim:
-  physics_dt_s: 0.01          # integration step of the plant model
-  publish_period_s: 0.1       # how often the simulated PLCs update their OPC UA values
+  physics_dt_s: 0.01          # plant integration step
+  publish_period_s: 0.1       # how often PLCs update their OPC UA values
   time_scale: 1.0             # 1.0 = real time; >1 runs faster than wall clock (D-06)
   seed: 42
-  material:                   # recycled feed; see D-25
-    solid_density_kg_m3: 950.0
-    melt_cp_kj_kg_k: 2.0
-  refill:                     # batch refill of the shredder hopper (D-02)
-    batch_kg: 100.0
-    response_delay_mean_s: 120.0  # a person refills: random delay, distribution open (D-02)
-    pour_rate_kg_h: 3000.0    # 100 kg pours in 2 min
 
 devices:
   - id: shredder
     type: shredder
     opcua:
       endpoint: opc.tcp://127.0.0.1:4841/factory/shredder
-    hopper:
+    hopper:                   # weighed by a load cell (D-03)
       capacity_kg: 200.0
       low_switch_kg: 40.0
       high_switch_kg: 160.0
       initial_kg: 120.0
-      load_cell:              # line throughput is measured here (D-03)
-        resolution_kg: 0.01
-        noise_kg: 0.0
     motor:
-      rated_rpm: 1750.0
       max_rpm: 1800.0
-      time_constant_s: 1.0
-      max_accel_rpm_s: 300.0
-    gearbox:
-      ratio: 20.0             # rotor ~88 rpm at rated motor speed
-    rotor:
-      capacity_kg_h_at_rated: 300.0
     motor_thermal:
-      ambient_c: 25.0
       initial_c: 25.0
     vibration:
       sample_rate_hz: 2560.0
@@ -62,32 +44,16 @@ devices:
       high_switch_kg: 40.0
       initial_kg: 25.0
     motor:
-      rated_rpm: 1750.0
       max_rpm: 1800.0
-      time_constant_s: 1.0
-      max_accel_rpm_s: 300.0
-    gearbox:
-      ratio: 15.0             # screw ~117 rpm at rated motor speed
-    screw:
-      output_kg_h_per_screw_rpm: 2.5
-    barrel:
-      initial_c: 25.0
-      setpoint_c: 200.0
-      max_setpoint_c: 280.0
-      heater_power_kw: 12.0
-      min_screw_temp_c: 160.0 # screw may not turn below this (cold-start interlock, D-28)
-      pid:                    # heater duty [%] from temperature error [K]; untuned (D-26)
-        kp: 5.0
-        ki: 0.01
-        kd: 0.0
-        out_min: 0.0
-        out_max: 100.0
     motor_thermal:
-      ambient_c: 25.0
       initial_c: 25.0
     vibration:
       sample_rate_hz: 2560.0
       block_size: 1024
+    barrel:
+      initial_c: 25.0
+      setpoint_c: 200.0
+      max_setpoint_c: 280.0
 
   - id: water_bath
     type: water_bath
@@ -101,35 +67,14 @@ devices:
     opcua:
       endpoint: opc.tcp://127.0.0.1:4844/factory/pelletizer
     motor:
-      rated_rpm: 1750.0
       max_rpm: 1800.0
-      time_constant_s: 0.5
-      max_accel_rpm_s: 600.0
-    cutter:
-      knives: 24
-      strands: 8
-      strand_speed_m_min_per_rpm: 0.075  # 75 m/min at 1000 rpm
-      rotor_rpm_per_motor_rpm: 1.0       # pellet length = 0.075/24 m ~ 3.1 mm, fixed
     motor_thermal:
-      ambient_c: 25.0
       initial_c: 25.0
 
 supervisor:
   db_path: data/factory.db
   subscription_period_ms: 100
   historian_flush_period_s: 1.0
-  analyzer:
-    setpoint_tracking:
-      deadband_rpm: 20.0
-      min_step_rpm: 50.0
-      timeout_s: 15.0         # fixed interim value; step-size-dependent timeout is D-33
-    overtemp:
-      warn_c: 90.0            # placeholders; depend on sensor location (D-23)
-      alarm_c: 105.0
-      hysteresis_c: 3.0
-    vibration:
-      baseline_blocks: 50
-      threshold_sigma: 4.0
   control:
     mode: manual              # manual | baseline | mpc
     period_s: 1.0

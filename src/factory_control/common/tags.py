@@ -3,17 +3,19 @@
 Both sides import this module: a PLC builds its address space from it and the
 supervisor's client resolves nodes from it. There is no second list to keep in sync.
 
-Tags are grouped into reusable *components* (hopper, motor, vibration, barrel,
-bath); a *device type* is a root object plus a set of components:
+Tags are grouped into *components*; a *device type* is a root object plus a set of
+components:
 
-    Shredder    Identification, Hopper (+Weight), Motor, MotorHealth, Vibration
+    Shredder    Identification, Hopper (incl. Weight), Motor, MotorHealth, Vibration
     Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel, Die
     WaterBath   Identification, Bath
     Pelletizer  Identification, Motor, MotorHealth
 
 Example browse path: ``Objects/Extruder/Barrel/TemperatureSetpoint``.
-Every server additionally exposes ``Objects/Simulation`` in a separate namespace
-(sim only, D-14).
+
+Every server also exposes a sim-only ``Objects/Simulation`` object in a separate
+namespace (fault injection and ground truth, D-14). Its names are defined at the
+bottom of this module.
 """
 
 from __future__ import annotations
@@ -22,8 +24,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 DEVICE_NS_URI = "urn:factory-control:device"
-SIM_NS_URI = "urn:factory-control:simulation"
-SIM_OBJECT = "Simulation"
 
 
 class ValueType(StrEnum):
@@ -35,14 +35,13 @@ class ValueType(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Tag:
-    key: str  # stable internal id (unique within a device), used in the DB and analyzer
+    key: str  # stable internal id, used in the DB and the analyzer
     path: tuple[str, ...]  # browse path below the device's root object
     vtype: ValueType
     unit: str = ""
-    writable: bool = False
+    writable: bool = False  # a setpoint; its range is enforced by the PLC (D-13)
     historize: bool = True  # stored in the ``sample`` table (scalars only)
     description: str = ""
-    requires: str | None = None  # optional instrument; tag exists only if fitted
 
 
 def _t(key: str, path: str, vtype: ValueType, unit: str = "", **kw: object) -> Tag:
@@ -55,27 +54,17 @@ D, B, S = ValueType.DOUBLE, ValueType.BOOLEAN, ValueType.STRING
 
 DEVICE_ID = _t("ident.device_id", "Identification/DeviceId", S, historize=False)
 
-LEVEL_LOW = _t(
-    "hopper.level_low",
-    "Hopper/LevelLow",
-    B,
-    description="Low level switch; True = material present at switch",
-)
-LEVEL_HIGH = _t(
-    "hopper.level_high",
-    "Hopper/LevelHigh",
-    B,
-    description="High level switch; True = material present at switch",
-)
+# Level switches: True = material present at the switch.
+LEVEL_LOW = _t("hopper.level_low", "Hopper/LevelLow", B)
+LEVEL_HIGH = _t("hopper.level_high", "Hopper/LevelHigh", B)
 HOPPER_WEIGHT = _t(
     "hopper.weight_kg",
     "Hopper/Weight",
     D,
     "kg",
-    requires="hopper_load_cell",
     description="Net material mass from the hopper's load cell (D-03)",
 )
-HOPPER = (LEVEL_LOW, LEVEL_HIGH, HOPPER_WEIGHT)
+HOPPER = (LEVEL_LOW, LEVEL_HIGH)
 
 SPEED_SETPOINT = _t("motor.speed_setpoint_rpm", "Motor/SpeedSetpoint", D, "rpm", writable=True)
 SPEED = _t("motor.speed_rpm", "Motor/Speed", D, "rpm")
@@ -111,7 +100,11 @@ BARREL_SETPOINT = _t(
     description="Setpoint of the PLC's barrel PID",
 )
 BARREL_TEMP = _t(
-    "barrel.temperature_c", "Barrel/Temperature", D, "degC", description="Barrel thermocouple"
+    "barrel.temperature_c",
+    "Barrel/Temperature",
+    D,
+    "degC",
+    description="Barrel wall thermocouple; the barrel PID's measurement",
 )
 HEATER_OUTPUT = _t(
     "barrel.heater_output_pct",
@@ -120,16 +113,16 @@ HEATER_OUTPUT = _t(
     "%",
     description="Barrel PID output (heater duty); a PLC value, not a sensor",
 )
+BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
+
 MELT_TEMP = _t(
     "die.melt_temperature_c",
     "Die/MeltTemperature",
     D,
     "degC",
-    description="Melt thermocouple in the melt stream at the die (D-08)",
+    description="Thermocouple in the melt stream at the die (D-08)",
 )
 DIE = (MELT_TEMP,)
-
-BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
 
 BATH_TEMP = _t("bath.water_temperature_c", "Bath/WaterTemperature", D, "degC")
 BATH = (BATH_TEMP,)
@@ -147,22 +140,22 @@ class DeviceType:
 DEVICE_TYPES: dict[str, DeviceType] = {
     dt.name: dt
     for dt in (
-        DeviceType("shredder", "Shredder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION)),
-        DeviceType(
-            "extruder",
-            "Extruder",
-            (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL, *DIE),
-        ),
+        DeviceType("shredder", "Shredder",
+                   (DEVICE_ID, *HOPPER, HOPPER_WEIGHT, *MOTOR, *MOTOR_HEALTH, *VIBRATION)),
+        DeviceType("extruder", "Extruder",
+                   (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL, *DIE)),
         DeviceType("water_bath", "WaterBath", (DEVICE_ID, *BATH)),
         DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH)),
     )
-}
+}  # fmt: skip
 
 ALL_TAGS: dict[str, Tag] = {t.key: t for dt in DEVICE_TYPES.values() for t in dt.tags}
 
+# --- simulation-only object (D-14) -----------------------------------------------------
 
-def tags_for(device_type: str, instruments: frozenset[str] = frozenset()) -> tuple[Tag, ...]:
-    """The tags a device of this type, with these optional instruments, exposes."""
-    return tuple(
-        t for t in DEVICE_TYPES[device_type].tags if t.requires is None or t.requires in instruments
-    )
+SIM_NS_URI = "urn:factory-control:simulation"
+SIM_OBJECT = "Simulation"
+SIM_ACTIVE_FAULTS = "ActiveFaults"  # String (JSON): ground truth of injected faults
+SIM_INJECT_FAULT = "InjectFault"  # method (name, params_json) -> Boolean
+SIM_CLEAR_FAULTS = "ClearFaults"  # method () -> Boolean
+GROUND_TRUTH_KEY = "sim.active_faults"  # key under which ground truth travels and is stored

@@ -35,12 +35,13 @@ averages, and never interpolate linearly.
 
 ## Volume estimates
 
-- Scalars: about 11 continuously changing tags across the four devices (shredder
-  weight, speed, current, temperature; extruder speed, current, temperature,
-  barrel temperature, heater output; bath temperature; pelletizer speed) × up to
-  10 Hz = 110 rows/s worst case (once sensor noise exists, every publish is a
-  change) ≈ 9.5 M rows/day. At about 60–80 bytes per row including the index,
-  that is roughly 0.7 GB/day.
+- Scalars: 14 continuously changing tags across the four devices (shredder
+  weight, speed, current, motor temperature; extruder speed, current, motor
+  temperature, barrel temperature, melt temperature, heater output; bath
+  temperature; pelletizer speed, current, motor temperature) × up to 10 Hz =
+  140 rows/s worst case (once sensor noise exists, every publish is a change)
+  ≈ 12 M rows/day. At about 60–80 bytes per row including the index, that is
+  roughly 0.85 GB/day.
   Mitigations: an absolute deadband on the subscription (D-11), and downsampled
   rollups with a retention window.
 - Raw vibration (shredder and extruder): 2560 samples/s × 4 bytes = 10 kB/s per

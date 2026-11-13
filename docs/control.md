@@ -8,7 +8,7 @@ runs faster than the layer above:
 | Layer | Where | Period | Loops in this line |
 |---|---|---|---|
 | 0. Drives | inside each VFD | ~ms | motor speed loops (shredder, extruder, pelletizer) |
-| 1. Regulatory / local | each device's PLC | 10–100 ms scan | barrel temperature PID; extruder cold-start interlock; shredder overload auto-reverse; batch-refill request |
+| 1. Regulatory / local | each device's PLC | 10–100 ms scan | barrel temperature PID; extruder cold-start interlock; shredder overload auto-reverse |
 | 2. Supervisory | supervisor (this repo) | ~1 s | throughput coordination: extruder speed, shredder speed (buffer), pelletizer speed (pellet size); possibly barrel setpoint |
 | 3. Planning | out of scope | minutes–days | production targets, recipes |
 
@@ -137,7 +137,7 @@ MPC earns its complexity when one or more of these is true:
 4. future changes are known in advance (preview);
 5. dead time is significant relative to the dynamics.
 
-The earlier two-feeder line met almost none of these. This line meets several:
+This line meets several of them:
 
 | Criterion | In this line |
 |---|---|

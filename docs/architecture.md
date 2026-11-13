@@ -85,11 +85,11 @@ src/factory_control/
   config.py          typed config; devices are a discriminated union by type
   common/            tag contract (per device type) + message records
   sim/
-    components/      motor, motor thermal, hopper, sensors, vibration
+    components/      drive (motor + motor thermal), hopper, sensors, vibration
     devices/         shredder, extruder, water_bath, pelletizer plant models
     line.py          material coupling + batch refill;  faults.py
-  plc/               generic PLC (OPC UA server + scan cycle), PID block,
-                     extruder/shredder PLC logic, simulator runner
+  plc/               generic PLC (OPC UA server, setpoint checking, scan cycle),
+                     extruder/shredder PLC stubs, PID stub, simulator runner
   supervisor/        DeviceClient, bus, historian, state, analyzer/, control/
   storage/           SQLite schema and access
   dashboard/         FastAPI + one static page
@@ -117,7 +117,7 @@ over OPC UA and is quarantined by tag name.
 | Part | Status |
 |---|---|
 | Config, tag contract, CLI | infrastructure, working |
-| PLC plumbing: OPC UA servers, write handling, scan cycle, sim methods | infrastructure, working |
+| PLC plumbing: OPC UA servers, setpoint range checking (rejects out-of-range writes, D-13), scan cycle, sim methods | infrastructure, working |
 | Supervisor plumbing: clients, bus, historian, rule routing per device | infrastructure, working |
 | Dashboard (motor speeds) | infrastructure, placeholder page |
 | All physics (motor, hoppers, shredder, extruder, barrel, bath, pelletizer, sensors, refill, vibration) | **not implemented**: placeholders (speed = setpoint; all else held constant) |

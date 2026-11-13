@@ -6,7 +6,10 @@ to be designed (docs/plant-model.md section 2.4). PLACEHOLDERS pass values throu
 
 from __future__ import annotations
 
-from factory_control.config import LoadCellConfig
+from typing import Any
+
+from factory_control.common import tags as T
+from factory_control.config import HopperConfig
 
 
 class LevelSwitch:
@@ -19,11 +22,19 @@ class LevelSwitch:
         return mass_kg >= self.threshold_kg
 
 
+class HopperSwitches:
+    """The low and high level switches of one hopper."""
+
+    def __init__(self, cfg: HopperConfig) -> None:
+        self.low = LevelSwitch(cfg.low_switch_kg)
+        self.high = LevelSwitch(cfg.high_switch_kg)
+
+    def measure(self, mass_kg: float) -> dict[str, Any]:
+        return {T.LEVEL_LOW.key: self.low.read(mass_kg), T.LEVEL_HIGH.key: self.high.read(mass_kg)}
+
+
 class LoadCell:
     """Hopper weighing (D-21). PLACEHOLDER: passes the true mass through."""
-
-    def __init__(self, cfg: LoadCellConfig) -> None:
-        self.cfg = cfg
 
     def read(self, mass_kg: float) -> float:
         return mass_kg

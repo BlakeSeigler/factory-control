@@ -26,7 +26,7 @@ class Motor:
         self.state = MotorState(speed_rpm=cfg.initial_rpm, setpoint_rpm=cfg.initial_rpm)
 
     def command(self, setpoint_rpm: float) -> None:
-        """Speed command to the drive. Limits/validation: D-13."""
+        """Speed command to the drive (already range-checked by the PLC)."""
         self.state.setpoint_rpm = setpoint_rpm
 
     def step(self, dt: float, load_torque_nm: float = 0.0) -> None:

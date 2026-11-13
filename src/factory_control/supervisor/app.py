@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from factory_control.common import tags as T
-from factory_control.common.messages import AlarmEvent, Sample
+from asyncua.ua.uaerrors import UaStatusCodeError
+
+from factory_control.common.messages import AlarmEvent, Sample, SetpointCommand
 from factory_control.config import AppConfig
 from factory_control.storage.db import Database
 from factory_control.supervisor.analyzer.engine import AnalyzerEngine
@@ -37,15 +38,20 @@ async def _control_loop(
     historian: Historian,
 ) -> None:
     target: LineTarget | None = None  # TODO(D-45): runtime source of the line target
+
+    async def send(cmd: SetpointCommand) -> SetpointCommand | None:
+        try:
+            await clients[cmd.device_id].write(cmd.tag, cmd.value)
+            return cmd
+        except (ConnectionError, UaStatusCodeError) as e:  # e.g. BadOutOfRange (D-13)
+            log.error("setpoint %s %s = %g not applied: %s", cmd.device_id, cmd.tag, cmd.value, e)
+            return None
+
     while True:
         await asyncio.sleep(cfg.supervisor.control.period_s)
-        for cmd in controller.step(state.now, state, target):
-            client = clients[cmd.device_id]
-            if not client.connected.is_set():
-                log.warning("dropping setpoint for disconnected %s", cmd.device_id)
-                continue
-            await client.write(cmd.tag, cmd.value)
-            await historian.record_setpoint(cmd)
+        results = await asyncio.gather(*map(send, controller.step(state.now, state, target)))
+        if sent := [c for c in results if c is not None]:
+            await historian.record_setpoints(sent)
 
 
 async def run_supervisor(cfg: AppConfig, stop: asyncio.Event | None = None) -> None:
@@ -63,10 +69,9 @@ async def run_supervisor(cfg: AppConfig, stop: asyncio.Event | None = None) -> N
     async def on_alarm(ev: AlarmEvent) -> None:
         await historian.record_alarm(ev)
 
-    device_tags = {
-        d.id: frozenset(t.key for t in T.tags_for(d.type, d.instruments)) for d in cfg.devices
-    }
-    analyzer = AnalyzerEngine(device_tags, sc.analyzer, on_alarm)
+    analyzer = AnalyzerEngine(
+        {d.id: frozenset(t.key for t in d.tags) for d in cfg.devices}, on_alarm
+    )
     clients = {d.id: DeviceClient(d, bus, period_ms=sc.subscription_period_ms) for d in cfg.devices}
 
     tasks = [

@@ -26,38 +26,40 @@ from factory_control.config import DEFAULT_CONFIG_PATH, AppConfig, load_config
 
 
 async def _with_device(cfg: AppConfig, device_id: str, fn: Callable[[Any], Awaitable[Any]]) -> Any:
-    from asyncua import Client
+    from factory_control.supervisor.client import make_client
 
-    client = Client(cfg.device(device_id).opcua.endpoint, timeout=4)
-    client.session_timeout = 30_000
-    async with client:
+    async with make_client(cfg.device(device_id).opcua.endpoint) as client:
         return await fn(client)
 
 
-async def write_tag(cfg: AppConfig, device_id: str, tag_key: str, value: float) -> None:
-    from asyncua import ua
+async def write(cfg: AppConfig, device_id: str, tag_key: str, value: float) -> None:
+    from asyncua.ua.uaerrors import UaStatusCodeError
 
-    from factory_control.supervisor.client import resolve_tag_node
+    from factory_control.supervisor.client import resolve_tag_nodes, write_tag
 
-    dev = cfg.device(device_id)
-    writable = {t.key for t in T.tags_for(dev.type, dev.instruments) if t.writable}
+    device = cfg.device(device_id)
+    writable = {t.key: t for t in device.tags if t.writable}
     if tag_key not in writable:
         raise SystemExit(
             f"{device_id} has no writable tag {tag_key!r}; options: {sorted(writable)}"
         )
 
     async def go(client: Any) -> None:
-        node = await resolve_tag_node(client, dev.type, T.ALL_TAGS[tag_key])
-        await node.write_value(ua.Variant(float(value), ua.VariantType.Double))
+        nodes = await resolve_tag_nodes(client, device)
+        await write_tag(nodes[tag_key], writable[tag_key], value)
 
-    await _with_device(cfg, device_id, go)
+    try:
+        await _with_device(cfg, device_id, go)
+    except UaStatusCodeError as e:  # e.g. BadOutOfRange (D-13)
+        raise SystemExit(f"{device_id}: {tag_key} = {value} REJECTED by the PLC: {e}") from e
     print(f"{device_id}: {tag_key} = {value}")
 
 
 async def _sim_method(cfg: AppConfig, device_id: str, method: str, *args: str) -> None:
+    from factory_control.supervisor.client import resolve_sim_object
+
     async def go(client: Any) -> Any:
-        ns = await client.get_namespace_index(T.SIM_NS_URI)
-        sim = await client.nodes.objects.get_child([f"{ns}:{T.SIM_OBJECT}"])
+        sim, ns = await resolve_sim_object(client)
         return await sim.call_method(f"{ns}:{method}", *args)
 
     print(f"{device_id}: {method} -> {await _with_device(cfg, device_id, go)}")
@@ -107,12 +109,12 @@ def main(argv: list[str] | None = None) -> None:
 
                 uvicorn.run(create_app(cfg), host=cfg.dashboard.host, port=cfg.dashboard.port)
             case "write":
-                asyncio.run(write_tag(cfg, a.device, a.tag, a.value))
+                asyncio.run(write(cfg, a.device, a.tag, a.value))
             case "fault":
                 json.loads(a.params)  # validate before sending
-                asyncio.run(_sim_method(cfg, a.device, "InjectFault", a.kind, a.params))
+                asyncio.run(_sim_method(cfg, a.device, T.SIM_INJECT_FAULT, a.kind, a.params))
             case "clear-faults":
-                asyncio.run(_sim_method(cfg, a.device, "ClearFaults"))
+                asyncio.run(_sim_method(cfg, a.device, T.SIM_CLEAR_FAULTS))
 
 
 if __name__ == "__main__":

@@ -40,10 +40,10 @@ client/server.
 
 | Concept | Meaning | Where |
 |---|---|---|
-| Namespace URI / index | Nodes live in namespaces. The URI is stable. The index is just the URI's position in the server's namespace array and **may differ between servers**. Clients must resolve the index from the URI on every connect. | `client.get_namespace_index(FEEDER_NS_URI)` |
+| Namespace URI / index | Nodes live in namespaces. The URI is stable. The index is just the URI's position in the server's namespace array and **may differ between servers**. Clients must resolve the index from the URI on every connect. | `client.get_namespace_index(DEVICE_NS_URI)` |
 | NodeId | (namespace index, identifier). Server-assigned here. We never hard-code NodeIds; we resolve by browse path. | `client.py::_subscribe` |
 | BrowseName / browse path | Human-meaningful path such as `Extruder/Barrel/Temperature`. This is our contract. | `common/tags.py` |
-| DataValue | A variable's value plus **StatusCode** (Good/Uncertain/Bad), **SourceTimestamp** (when the source sampled it) and **ServerTimestamp** (when the server stored it). | `server.py::_write` |
+| DataValue | A variable's value plus **StatusCode** (Good/Uncertain/Bad), **SourceTimestamp** (when the source sampled it) and **ServerTimestamp** (when the server stored it). | `plc/base.py::_write` |
 | Subscription | A container on the server with a *publishing interval*: how often it may send batched notifications. | `subscription_period_ms` |
 | MonitoredItem | One watched attribute in a subscription. It has a *sampling interval* (how often the server checks the value), a *queue size*, and a *filter*. | defaults today (D-11) |
 | DataChangeFilter | Trigger (Status / StatusValue / StatusValueTimestamp) and deadband (none / absolute / percent). This decides what counts as a change. | defaults today (D-11) |
@@ -56,7 +56,7 @@ Consequences:
 
 1. A historian row means "the value became *v* at *t* and **held** until the next
    row". The dashboard therefore draws step lines. Linear interpolation would draw
-   ramps that never happened. We hit exactly this bug while building the dashboard.
+   ramps that never happened.
 2. Averages over time must be **time-weighted**. A plain `AVG(value)` over
    rows is wrong.
 3. Silence is ambiguous: a constant value and a dead source both produce no
@@ -78,14 +78,13 @@ Consequences:
 A setpoint is state, so we use a writable variable. Fault injection is an action
 with parameters, so we use methods.
 
-**Known gap (D-13):** the PLC currently *clamps* an out-of-range setpoint (motor
-speed above max, barrel setpoint above `max_setpoint_c`) and logs it, but the node
-still shows the requested value (e.g. 2500 rpm while 1800 is applied). That is misleading. Options:
-(a) reject with `BadOutOfRange` via a write setter, so the client gets an
-explicit error (recommended);
-(b) write the clamped value back to the node;
-(c) add a separate read-only `AppliedSetpoint` tag. Real drives commonly do (c)
-in addition to (a).
+**Range checking (D-13, decided).** Every writable tag has an allowed range from
+config (motor `min_rpm`/`max_rpm`, barrel `min_setpoint_c`/`max_setpoint_c`). The
+PLC installs one generic write handler on each writable node (`plc/base.py`). An
+out-of-range write is **rejected** with the status `BadOutOfRange`: the node keeps
+its previous value, the PLC logs the rejection, and the writing client gets an
+error (`fc write` prints it and exits non-zero; the supervisor logs it). Nothing is
+silently clamped.
 
 ## 4. Security (D-12)
 
@@ -105,7 +104,8 @@ can change motor speeds.
 
 ## 5. Our address space
 
-Generated per device type from `common/tags.py` (single source of truth). Each PLC
+Generated per device type from `common/tags.py`, which is authoritative; this
+listing mirrors it for reading. Each PLC
 exposes one root object named after its type, in namespace
 `urn:factory-control:device`:
 

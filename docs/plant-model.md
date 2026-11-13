@@ -3,7 +3,8 @@
 Status: **draft for discussion. Nothing in this document is implemented.** The
 simulator currently uses placeholders (speed = setpoint, everything else held at
 its initial value) only so that the infrastructure carries data. Every number in
-`config/line.yaml` is a placeholder until it is justified here.
+`config/line.yaml` is a placeholder; model parameters are added to the config
+together with the model that uses them.
 
 Notation: n = motor speed [rpm], N = driven-shaft speed (rotor or screw) [rpm],
 i = gear ratio (motor/shaft), M = hopper mass [kg], ṁ = mass flow [kg/s or kg/h],
@@ -123,9 +124,8 @@ hangs over the outlet, the screw starves, and the switch still reads "covered".
 This is a process fault the extruder hopper model should support.
 
 Refill (decided): when the shredder hopper's LOW switch uncovers, **a person**
-brings a batch of `batch_kg` after a **random** delay (mean
-`response_delay_mean_s`), which pours at `pour_rate_kg_h`. Open: the delay
-distribution and overflow handling. Both are deferred.
+brings a batch after a **random** delay, and it pours in over some time. Batch
+size, delay distribution and overflow handling are deferred.
 
 ### 3.2 Shredder (D-16)
 
@@ -194,7 +194,7 @@ relation, roughly `T_melt ≈ T_b + ΔT_shear(N, ṁ, viscosity)`, plus sensor l
 That relation is a discussion item.
 
 Real extruders have 3–6 barrel zones, each with a heater, a thermocouple and often
-a cooling blower. You specified one zone with one heater and one sensor. That is fine
+a cooling blower. This line has one zone with one heater and one barrel sensor. That is fine
 for the model, with two caveats: the dynamics are slower and lumped, and there is
 no cooling (D-18).
 
@@ -220,9 +220,9 @@ One motor (speed n) drives the feed rolls (strand speed `v = a·n`) and the roto
     pellet mass     m_p = ṁ / (s · z · n_r)                          follows mass flow
     strand diameter d   = sqrt( 4ṁ / (π · s · ρ · v) )
 
-These follow from geometry (not implemented yet). With the
-placeholder config (a = 0.075 m/min per rpm, z = 24, b = 1), L ≈ 3.1 mm; at
-250 kg/h and 1000 rpm, d ≈ 3.0 mm.
+These follow from geometry (not implemented yet). Example values: a = 0.075 m/min
+per rpm, z = 24, b = 1 give L ≈ 3.1 mm; with s = 8 strands at 250 kg/h and
+1000 rpm, d ≈ 3.0 mm.
 
 Consequence: with fixed gearing, **only pellet mass varies**, through strand
 diameter, and it varies in proportion to ṁ/n. Equal pellets therefore require
