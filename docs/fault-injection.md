@@ -51,15 +51,15 @@ tracking / motor overtemp / vibration (analyzer.md).
 | Knife wear | shredder | slow: weight-loss rate per rpm falls; current per kg rises | nothing yet (trend on load-cell flow vs. speed) |
 | Hopper bridging | extruder | output falls below K·N; extruder hopper "covered" yet the shredder-side balance stops adding up; current drops | estimator inconsistency (control.md §3); no rule yet |
 | Heater failure | extruder | barrel temperature falls; **heater output pinned at 100 %** | nothing yet; "PID saturated + error growing" is an easy rule to add |
-| Screen blockage | extruder | output per rpm falls slowly; current rises; **pressure would show it directly, but there is no pressure sensor** | nothing direct (D-08) |
+| Screen blockage | extruder | output per rpm falls slowly; current rises; melt temperature may rise (more shear); **pressure would show it directly, but there is no pressure sensor** | nothing direct (D-08) |
 | Winding short / fan blocked | shredder, extruder | motor temperature rises at same load | Rule 2 (rate-of-rise detects it earlier) |
 | Bearing wear / misalignment | shredder, extruder | envelope / 2× energy | Rule 3 (shredder baseline is hard: plant-model.md §2.3) |
 | Drive unresponsive | any motor | speed constant after setpoint change; current unchanged | Rule 1 |
-| Strand break | pelletizer | `Strands/Present` entry goes False; `Strands/Count` drops; small drop in cutter current | strand detector (a rule on `Strands/Count`, D-39) |
+| Strand break | pelletizer | possibly a small drop in cutter motor current (fewer strands to cut); otherwise nothing | not reliably observable: no detector (D-47) |
 | Bath overheat | water bath | water temperature rises | sensor only for now |
 | Refill late | shredder | low switch uncovered, weight keeps falling toward 0 | "low and no refill" rule on weight (proposed) |
 | Sensor stuck / drift | any | frozen or biased value | Rule 1 false cause; cross-checks (current vs. speed) |
-| Thermocouple open | extruder, motors | temperature reads full scale or a fault value; **barrel PID then cuts the heater** | plausibility check (an impossible rate of change) |
+| Thermocouple open | extruder (barrel, melt), motors | temperature reads full scale or a fault value; **barrel PID then cuts the heater** | plausibility check (an impossible rate of change) |
 
 Conclusions to discuss:
 

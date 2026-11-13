@@ -43,6 +43,8 @@ class ExtruderPlant(DevicePlant):
         )
         self.barrel_tc = Thermocouple()
         self.barrel_temp_c = cfg.barrel.initial_c
+        self.melt_tc = Thermocouple()
+        self.melt_temp_c = cfg.barrel.initial_c  # PLACEHOLDER (D-18): held constant
         self.heater_duty_pct = 0.0
         self.output_kg_s = 0.0
 
@@ -68,6 +70,7 @@ class ExtruderPlant(DevicePlant):
             T.MOTOR_CURRENT.key: self.motor.state.current_a,
             T.MOTOR_TEMP.key: self.thermal.state.temperature_c,
             T.BARREL_TEMP.key: self.barrel_tc.read(self.barrel_temp_c),
+            T.MELT_TEMP.key: self.melt_tc.read(self.melt_temp_c),
         }
 
     def vibration_block(self) -> np.ndarray:

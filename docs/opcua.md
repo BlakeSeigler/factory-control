@@ -123,15 +123,14 @@ Objects/Shredder/                         Objects/Extruder/
   Vibration/Waveform        Double[]        Barrel/TemperatureSetpoint  Double degC RW
                                             Barrel/Temperature          Double degC
 Objects/WaterBath/                          Barrel/HeaterOutput         Double %
-  Identification/DeviceId   String
-  Bath/WaterTemperature     Double degC   Objects/Pelletizer/
+  Identification/DeviceId   String          Die/MeltTemperature         Double degC
+  Bath/WaterTemperature     Double degC
+                                          Objects/Pelletizer/
                                             Identification/DeviceId     String
                                             Motor/SpeedSetpoint         Double rpm  RW
                                             Motor/Speed                 Double rpm
                                             Motor/Current               Double A
                                             Motor/Temperature           Double degC
-                                            Strands/Present             Boolean[] one per strand
-                                            Strands/Count               Double (PLC-computed)
 
 Every server also has, in namespace urn:factory-control:simulation (sim only, D-14):
   Objects/Simulation/ActiveFaults (String JSON), InjectFault(name, params_json), ClearFaults()

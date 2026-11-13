@@ -7,9 +7,9 @@ Tags are grouped into reusable *components* (hopper, motor, vibration, barrel,
 bath); a *device type* is a root object plus a set of components:
 
     Shredder    Identification, Hopper (+Weight), Motor, MotorHealth, Vibration
-    Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel
+    Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel, Die
     WaterBath   Identification, Bath
-    Pelletizer  Identification, Motor, MotorHealth, Strands
+    Pelletizer  Identification, Motor, MotorHealth
 
 Example browse path: ``Objects/Extruder/Barrel/TemperatureSetpoint``.
 Every server additionally exposes ``Objects/Simulation`` in a separate namespace
@@ -31,7 +31,6 @@ class ValueType(StrEnum):
     BOOLEAN = "boolean"
     STRING = "string"
     DOUBLE_ARRAY = "double[]"
-    BOOLEAN_ARRAY = "boolean[]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,22 +120,16 @@ HEATER_OUTPUT = _t(
     "%",
     description="Barrel PID output (heater duty); a PLC value, not a sensor",
 )
-BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
-
-STRANDS_PRESENT = _t(
-    "strands.present",
-    "Strands/Present",
-    ValueType.BOOLEAN_ARRAY,
-    historize=False,
-    description="Strand-break detector, one entry per strand; True = strand present",
-)
-STRANDS_COUNT = _t(
-    "strands.count",
-    "Strands/Count",
+MELT_TEMP = _t(
+    "die.melt_temperature_c",
+    "Die/MeltTemperature",
     D,
-    description="Strands present; PLC-computed from the detector",
+    "degC",
+    description="Melt thermocouple in the melt stream at the die (D-08)",
 )
-STRANDS = (STRANDS_PRESENT, STRANDS_COUNT)
+DIE = (MELT_TEMP,)
+
+BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
 
 BATH_TEMP = _t("bath.water_temperature_c", "Bath/WaterTemperature", D, "degC")
 BATH = (BATH_TEMP,)
@@ -156,10 +149,12 @@ DEVICE_TYPES: dict[str, DeviceType] = {
     for dt in (
         DeviceType("shredder", "Shredder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION)),
         DeviceType(
-            "extruder", "Extruder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL)
+            "extruder",
+            "Extruder",
+            (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL, *DIE),
         ),
         DeviceType("water_bath", "WaterBath", (DEVICE_ID, *BATH)),
-        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH, *STRANDS)),
+        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH)),
     )
 }
 

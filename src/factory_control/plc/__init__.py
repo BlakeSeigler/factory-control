@@ -10,14 +10,12 @@ from __future__ import annotations
 from factory_control.config import DeviceConfig
 from factory_control.plc.base import DevicePLC
 from factory_control.plc.extruder import ExtruderPLC
-from factory_control.plc.pelletizer import PelletizerPLC
 from factory_control.plc.shredder import ShredderPLC
 from factory_control.sim.clock import SimClock
 from factory_control.sim.devices.base import DevicePlant
 
 _PLCS: dict[str, type[DevicePLC]] = {
     "extruder": ExtruderPLC,
-    "pelletizer": PelletizerPLC,
     "shredder": ShredderPLC,
 }
 

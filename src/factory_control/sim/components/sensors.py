@@ -34,11 +34,3 @@ class Thermocouple:
 
     def read(self, temperature_c: float) -> float:
         return temperature_c
-
-
-class StrandDetector:
-    """One presence sensor per strand at the pelletizer inlet (light barrier or
-    mechanical feeler). PLACEHOLDER: ideal; reports the true strand states."""
-
-    def read(self, strands_present: list[bool]) -> list[bool]:
-        return list(strands_present)

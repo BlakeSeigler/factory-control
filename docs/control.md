@@ -149,10 +149,9 @@ The earlier two-feeder line met almost none of these. This line meets several:
 
 **Verdict:** MPC is justified for the **shredder + extruder throughput section**
 when the line is run near its limits. Two caveats:
-- The thermal side of the model is weakly observed. We measure barrel temperature
-  but not melt temperature or pressure, so predictions of the shear-heating
-  interaction will be uncertain. A melt pressure and a melt temperature sensor at
-  the die (standard on extruders) would strengthen this considerably (D-08).
+- We measure barrel **and** melt temperature (D-08), so the shear-heating
+  interaction is observed. Melt pressure is not measured, so screen clogging
+  shows up only indirectly (falling output per rpm, rising motor current).
 - The baseline (§4) still comes first, so we can *measure* what MPC adds.
 
 ## 8. Whole system or parts? (D-41)

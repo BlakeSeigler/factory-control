@@ -25,9 +25,9 @@ A plastics recycling line. Cleaned plastic goes in, pellets come out:
 | Device | Actuators (writable over OPC UA) | Sensors / published values |
 |---|---|---|
 | Shredder | motor speed setpoint | hopper low/high switches, **hopper weight**, motor speed, current, temperature, vibration |
-| Extruder | motor speed setpoint, **barrel temperature setpoint** | hopper low/high switches, motor speed, current, temperature, vibration, barrel temperature, heater output (PID output) |
+| Extruder | motor speed setpoint, **barrel temperature setpoint** | hopper low/high switches, motor speed, current, temperature, vibration, barrel temperature, **melt temperature at the die**, heater output (PID output) |
 | Water bath | none | water temperature |
-| Pelletizer | motor speed setpoint | motor speed, current, temperature, strand-break detector (per strand) + strand count |
+| Pelletizer | motor speed setpoint | motor speed, current, temperature |
 
 **Line output** is the pellet mass flow leaving the pelletizer. It is measured
 **indirectly** from the shredder hopper's weight (D-03, control.md §3).
@@ -121,7 +121,7 @@ over OPC UA and is quarantined by tag name.
 | Supervisor plumbing: clients, bus, historian, rule routing per device | infrastructure, working |
 | Dashboard (motor speeds) | infrastructure, placeholder page |
 | All physics (motor, hoppers, shredder, extruder, barrel, bath, pelletizer, sensors, refill, vibration) | **not implemented**: placeholders (speed = setpoint; all else held constant) |
-| PLC logic (PID, interlock, auto-reverse, state tag) | **not implemented** (only the pelletizer PLC's strand count) |
+| PLC logic (PID, interlock, auto-reverse, state tag) | **not implemented** |
 | Fault effects and scenario playback | **not implemented** (faults can be injected and are recorded, but have no effect) |
 | Analyzer rules | **not implemented** (routing only) |
 | Estimator, baseline controller, MPC | **not implemented** |

@@ -125,8 +125,7 @@ This is a process fault the extruder hopper model should support.
 Refill (decided): when the shredder hopper's LOW switch uncovers, **a person**
 brings a batch of `batch_kg` after a **random** delay (mean
 `response_delay_mean_s`), which pours at `pour_rate_kg_h`. Open: the delay
-distribution (a person's response time is skewed: usually quick, occasionally
-very late), and what happens if the batch overflows the hopper.
+distribution and overflow handling. Both are deferred.
 
 ### 3.2 Shredder (D-16)
 
@@ -187,6 +186,13 @@ and temperature rises with nothing to pull it down, because we have no barrel
 cooling. **This is the main coupling in the line**: extruder speed and barrel
 temperature are not independent loops (control.md §7).
 
+**Two temperature sensors (D-08).** Barrel temperature (the steel wall near the
+heater) is what the barrel PID controls. Melt temperature (a thermocouple in the
+melt stream at the die) is barrel heat **plus** shear heat, so it rises with screw
+speed even when the barrel holds steady. The model needs a melt-temperature
+relation, roughly `T_melt ≈ T_b + ΔT_shear(N, ṁ, viscosity)`, plus sensor lag.
+That relation is a discussion item.
+
 Real extruders have 3–6 barrel zones, each with a heater, a thermocouple and often
 a cooling blower. You specified one zone with one heater and one sensor. That is fine
 for the model, with two caveats: the dynamics are slower and lumped, and there is
@@ -233,8 +239,8 @@ pellet size. A strand break is a common event; the cutter keeps running with one
 fewer strand.
 
 Decided (D-10, D-47): one motor with fixed ratios; sensors are speed, motor
-current, motor temperature, and a strand-break detector (one presence sensor per
-strand at the inlet: a light barrier or a mechanical feeler).
+current and motor temperature. No strand-break detector (D-47), so a break is
+practically invisible to our sensors (fault-injection.md §3).
 
 ## 4. Material model (D-25)
 
@@ -246,7 +252,7 @@ reject.
 
 ## 5. Open questions (priority order)
 
-1. Melt pressure and melt temperature sensors at the extruder die (D-08)?
-2. Refill delay distribution and overflow handling (D-02).
-3. Shredder ram: explicit or folded into throughput (§3.2)?
-4. Motor model B (D-15): current and heating depend on it.
+1. Shredder ram: explicit or folded into throughput (§3.2)?
+2. Motor model B (D-15): current and heating depend on it.
+3. How melt temperature relates to barrel temperature and shear (§3.3).
+4. Deferred: refill delay distribution and overflow (D-02).
