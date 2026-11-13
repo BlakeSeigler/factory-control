@@ -184,14 +184,16 @@ class MaterialConfig(_Strict):
 
 
 class RefillConfig(_Strict):
-    """Batch refill of the first hopper (D-02).
+    """Batch refill of the first hopper by a person (D-02).
 
     When the first hopper's LOW switch uncovers, a batch of ``batch_kg`` is
-    requested; it starts pouring after ``response_delay_s`` at ``pour_rate_kg_h``.
+    requested. A person responds after a RANDOM delay (mean
+    ``response_delay_mean_s``; distribution still to choose, D-02), then the batch
+    pours at ``pour_rate_kg_h``.
     """
 
     batch_kg: float = Field(gt=0)
-    response_delay_s: float = Field(ge=0)
+    response_delay_mean_s: float = Field(ge=0)
     pour_rate_kg_h: float = Field(gt=0)
 
 

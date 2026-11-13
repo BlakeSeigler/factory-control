@@ -9,7 +9,7 @@ bath); a *device type* is a root object plus a set of components:
     Shredder    Identification, Hopper (+Weight), Motor, MotorHealth, Vibration
     Extruder    Identification, Hopper, Motor, MotorHealth, Vibration, Barrel
     WaterBath   Identification, Bath
-    Pelletizer  Identification, Motor, MotorHealth
+    Pelletizer  Identification, Motor, MotorHealth, Strands
 
 Example browse path: ``Objects/Extruder/Barrel/TemperatureSetpoint``.
 Every server additionally exposes ``Objects/Simulation`` in a separate namespace
@@ -31,6 +31,7 @@ class ValueType(StrEnum):
     BOOLEAN = "boolean"
     STRING = "string"
     DOUBLE_ARRAY = "double[]"
+    BOOLEAN_ARRAY = "boolean[]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +123,21 @@ HEATER_OUTPUT = _t(
 )
 BARREL = (BARREL_SETPOINT, BARREL_TEMP, HEATER_OUTPUT)
 
+STRANDS_PRESENT = _t(
+    "strands.present",
+    "Strands/Present",
+    ValueType.BOOLEAN_ARRAY,
+    historize=False,
+    description="Strand-break detector, one entry per strand; True = strand present",
+)
+STRANDS_COUNT = _t(
+    "strands.count",
+    "Strands/Count",
+    D,
+    description="Strands present; PLC-computed from the detector",
+)
+STRANDS = (STRANDS_PRESENT, STRANDS_COUNT)
+
 BATH_TEMP = _t("bath.water_temperature_c", "Bath/WaterTemperature", D, "degC")
 BATH = (BATH_TEMP,)
 
@@ -143,7 +159,7 @@ DEVICE_TYPES: dict[str, DeviceType] = {
             "extruder", "Extruder", (DEVICE_ID, *HOPPER, *MOTOR, *MOTOR_HEALTH, *VIBRATION, *BARREL)
         ),
         DeviceType("water_bath", "WaterBath", (DEVICE_ID, *BATH)),
-        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH)),
+        DeviceType("pelletizer", "Pelletizer", (DEVICE_ID, *MOTOR, *MOTOR_HEALTH, *STRANDS)),
     )
 }
 

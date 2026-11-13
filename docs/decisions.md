@@ -11,15 +11,15 @@ Decided = agreed with Blake.
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
 | D-01 | Line composition | — | refill → shredder unit → extruder unit → water bath → pelletizer (bath before cutter, confirmed) | Decided |
-| D-02 | Refill of the shredder hopper | batch on low switch; delay fixed (loader) or random (person); overflow handling | batch on low (decided); delay model open | Decided / open detail |
+| D-02 | Refill of the shredder hopper | — | batch on low switch, brought by **a person: random delay**. Open: delay distribution, overflow handling | Decided / detail open |
 | D-03 | Throughput measurement | load cell on shredder hopper | decided; output = feed − losses over switch-to-switch intervals (control.md §3) | Decided |
 | D-04 | PLC/supervisor topology | one OPC UA server per device; one supervisor with one session per PLC / client process per device | one supervisor, one session per PLC | Provisional |
 | D-05 | Simulator layout | one process with four servers / one process per device + material channel | one process (material coupling needs one clock) | Provisional |
 | D-06 | Time base and speed | real time / accelerated / shortened time constants | sim clock everywhere; accelerate for thermal tests | Provisional |
 | D-07 | Publish PLC state (Running / Reversing / Interlocked / Faulted) | yes / no | **yes**: needed so Rule 1 does not flag auto-reverse and interlocks | Open |
-| D-08 | Extra extruder sensors: melt pressure, melt temperature at die | none / pressure / both | pressure at least (screen clogging, over-pressure safety); both if MPC uses the thermal model | Open |
+| D-08 | Extra extruder sensors at the die | melt pressure / melt temperature / both; barrel temperature stays either way | add both; **keep barrel temperature** (it is what the barrel PID controls) | Open: awaiting Blake |
 | D-09 | Vibration sensors on shredder and extruder | — | yes | Decided |
-| D-10 | Pelletizer: drive arrangement and sensors | — | one motor driving feed rolls and rotor; sensors: speed, motor current, motor temperature. Strand-break detector: open, pending explanation (D-47) | Decided |
+| D-10 | Pelletizer: drive arrangement and sensors | — | one motor driving feed rolls and rotor; sensors: speed, motor current, motor temperature. strand-break detector added (D-47) | Decided |
 
 ## OPC UA
 
@@ -73,7 +73,7 @@ Decided = agreed with Blake.
 | D-36 | Rule 3 method and baseline | band z-scores / robust stats / envelope; shredder baseline by throughput | robust, binned by speed and throughput | Open |
 | D-37 | Alarm lifecycle | raise/clear (current) / + acknowledge / + shelve | add acknowledge before the dashboard shows alarms | Open |
 | D-38 | Current-based detection | none / overload / sustained rise | none; current logged only | Decided |
-| D-39 | Additional cheap rules from fault-injection.md §3 | heater saturation, refill late, estimator consistency | discuss | Open |
+| D-39 | Additional cheap rules from fault-injection.md §3 | heater saturation, refill late, estimator consistency, strand count dropped | discuss | Open |
 
 ## Supervisory control (control.md)
 
@@ -96,4 +96,4 @@ Decided = agreed with Blake.
 
 | ID | Question | Options | Recommendation | Status |
 |---|---|---|---|---|
-| D-47 | Strand-break detection on the pelletizer | none / optical or contact sensor per strand at the cutter inlet / infer from motor current | discuss (control.md is unaffected either way) | Open |
+| D-47 | Strand-break detection on the pelletizer | — | **added**: one presence sensor per strand (`Strands/Present`), PLC publishes `Strands/Count`. Open: what the PLC does on a break (alarm / slow / stop) | Decided / reaction open |

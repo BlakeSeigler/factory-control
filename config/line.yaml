@@ -20,7 +20,7 @@ sim:
     melt_cp_kj_kg_k: 2.0
   refill:                     # batch refill of the shredder hopper (D-02)
     batch_kg: 100.0
-    response_delay_s: 120.0   # "hopper low" -> batch starts pouring
+    response_delay_mean_s: 120.0  # a person refills: random delay, distribution open (D-02)
     pour_rate_kg_h: 3000.0    # 100 kg pours in 2 min
 
 devices:

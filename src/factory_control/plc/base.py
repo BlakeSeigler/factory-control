@@ -31,12 +31,14 @@ _VARIANT = {
     T.ValueType.BOOLEAN: ua.VariantType.Boolean,
     T.ValueType.STRING: ua.VariantType.String,
     T.ValueType.DOUBLE_ARRAY: ua.VariantType.Double,
+    T.ValueType.BOOLEAN_ARRAY: ua.VariantType.Boolean,
 }
 _INITIAL = {
     T.ValueType.DOUBLE: 0.0,
     T.ValueType.BOOLEAN: False,
     T.ValueType.STRING: "",
     T.ValueType.DOUBLE_ARRAY: [0.0],
+    T.ValueType.BOOLEAN_ARRAY: [False],
 }
 
 

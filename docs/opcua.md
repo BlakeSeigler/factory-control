@@ -130,6 +130,8 @@ Objects/WaterBath/                          Barrel/HeaterOutput         Double %
                                             Motor/Speed                 Double rpm
                                             Motor/Current               Double A
                                             Motor/Temperature           Double degC
+                                            Strands/Present             Boolean[] one per strand
+                                            Strands/Count               Double (PLC-computed)
 
 Every server also has, in namespace urn:factory-control:simulation (sim only, D-14):
   Objects/Simulation/ActiveFaults (String JSON), InjectFault(name, params_json), ClearFaults()

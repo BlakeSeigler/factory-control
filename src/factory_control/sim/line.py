@@ -20,11 +20,10 @@ from factory_control.sim.devices.shredder import ShredderPlant
 class BatchRefill:
     """Batch refill of the first hopper (D-02).
 
-    PLACEHOLDER: never delivers. Must implement: when the shredder's LOW switch
-    uncovers and no batch is pending, schedule a batch of ``batch_kg`` to start
-    after ``response_delay_s`` and pour at ``pour_rate_kg_h``. Open: fixed or
-    random delay (automatic loader vs. a person), and what happens if a batch
-    would overflow the hopper.
+    PLACEHOLDER: never delivers. To implement: when the shredder's LOW switch
+    uncovers and no batch is pending, a person brings a batch of ``batch_kg``
+    after a random delay (mean ``response_delay_mean_s``), which pours at
+    ``pour_rate_kg_h``. Open: delay distribution; overflow handling.
     """
 
     def __init__(self, cfg: RefillConfig) -> None:

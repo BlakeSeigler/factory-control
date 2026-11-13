@@ -122,10 +122,11 @@ geometry). Recycled **flakes bridge** much more readily than pellets: material
 hangs over the outlet, the screw starves, and the switch still reads "covered".
 This is a process fault the extruder hopper model should support.
 
-Refill (decided): when the shredder hopper's LOW switch uncovers, a batch of
-`batch_kg` arrives after `response_delay_s` and pours at `pour_rate_kg_h`. Open:
-fixed delay (automatic loader) or random (a person with a forklift or bale)? And what
-happens if the batch overflows the hopper?
+Refill (decided): when the shredder hopper's LOW switch uncovers, **a person**
+brings a batch of `batch_kg` after a **random** delay (mean
+`response_delay_mean_s`), which pours at `pour_rate_kg_h`. Open: the delay
+distribution (a person's response time is skewed: usually quick, occasionally
+very late), and what happens if the batch overflows the hopper.
 
 ### 3.2 Shredder (D-16)
 
@@ -231,8 +232,9 @@ So the pelletizer speed must track throughput for strand stability, not only for
 pellet size. A strand break is a common event; the cutter keeps running with one
 fewer strand.
 
-Decided (D-10): one motor with fixed ratios; sensors are speed, motor current
-and motor temperature. Open (D-47): strand-break detection.
+Decided (D-10, D-47): one motor with fixed ratios; sensors are speed, motor
+current, motor temperature, and a strand-break detector (one presence sensor per
+strand at the inlet: a light barrier or a mechanical feeler).
 
 ## 4. Material model (D-25)
 
@@ -244,8 +246,7 @@ reject.
 
 ## 5. Open questions (priority order)
 
-1. Refill delay: fixed (automatic loader) or random (a person) (D-02)?
-2. Melt pressure and melt temperature sensors at the extruder die (D-08)?
-3. Strand-break detection on the pelletizer (D-47)?
-4. Shredder ram: explicit or folded into throughput (§3.2)?
-5. Motor model B (D-15): current and heating depend on it.
+1. Melt pressure and melt temperature sensors at the extruder die (D-08)?
+2. Refill delay distribution and overflow handling (D-02).
+3. Shredder ram: explicit or folded into throughput (§3.2)?
+4. Motor model B (D-15): current and heating depend on it.

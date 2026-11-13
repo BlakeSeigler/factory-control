@@ -14,6 +14,7 @@ from factory_control.common import tags as T
 from factory_control.config import MaterialConfig, PelletizerDeviceConfig
 from factory_control.sim.components.motor import Motor
 from factory_control.sim.components.motor_thermal import MotorThermal
+from factory_control.sim.components.sensors import StrandDetector
 from factory_control.sim.devices.base import DevicePlant
 
 
@@ -26,6 +27,8 @@ class PelletizerPlant(DevicePlant):
         super().__init__(cfg, material, rng)
         self.motor = Motor(cfg.motor)
         self.thermal = MotorThermal(cfg.motor_thermal)
+        self.strands_present = [True] * cfg.cutter.strands  # PLACEHOLDER: no breaks (D-19)
+        self.strand_detector = StrandDetector()
 
     def step(self, t: float, dt: float, inflow_kg_s: float) -> float:
         del t  # PLACEHOLDER: material passes straight through
@@ -38,4 +41,5 @@ class PelletizerPlant(DevicePlant):
             T.SPEED.key: self.motor.state.speed_rpm,
             T.MOTOR_CURRENT.key: self.motor.state.current_a,
             T.MOTOR_TEMP.key: self.thermal.state.temperature_c,
+            T.STRANDS_PRESENT.key: self.strand_detector.read(self.strands_present),
         }
